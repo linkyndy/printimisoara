@@ -77,8 +77,15 @@ class Time extends AppModel {
 		)
 	);
 	
-	
+	/**
+	 * Station line data of the currently
+	 * fetched time 
+	 */
 	public $stationLine = array();
+	
+	/**
+	 * HTML fetched containing times to be parsed
+	 */
 	protected $_html = null;
 	
 	/** 
@@ -86,19 +93,233 @@ class Time extends AppModel {
 	 * $this->getTime() or times fetched from
 	 * the database with $this->getOptimizedTime()
 	 */
-	protected $_time = null;
+	//protected $_time = null;
 	
 	/**
 	 * Contains times fetched from RATT for
 	 * public access
 	 */
-	public $time = null;
+	//public $time = null;
 	
 	/**
 	 * Contains optimized time for public
 	 * access
 	 */
-	public $optimizedTime = null;
+	//public $optimizedTime = null;
+	
+	/**
+	 * Currently processed times for saving
+	 */
+	protected $_times = array();
+	
+	/**
+	 * Methods in which times arrays can be parsed
+	 */
+	protected $_methods = array(
+		'fetch',
+		'station_line_batch',
+		'line_follow',
+		'station_group_follow',
+		'gps'
+	);
+	
+	/*
+	 * Fetch times for a specific station line
+	 *
+	 * @param $stationLineId
+	 *   The station_line_id for which to fetch times
+	 *
+	 * @return mixed
+	 *   Times if they were successfully fetched and parsed,
+	 *   false otherwise
+	 */
+	public function fetchTimes($stationLineId = null){
+		$this->Line->StationLine->recursive = 0;
+		if (!$this->stationLine = $this->Line->StationLine->find('first', array(
+			'conditions' => array('StationLine.id' => $stationLineId)
+		))) {
+			return false;
+		}
+		
+		if (!$this->_html = file_get_contents(sprintf(
+			Configure::read('Ratt.url'), 
+			$this->stationLine['Line']['id_ratt'], 
+			$this->stationLine['Station']['id_ratt']
+		))) {
+			$this->_logFileNotOpened();
+			return false;
+		}
+		
+		if (!$this->_parseTimes()) {
+			$this->_logFileChanged();
+			return false;
+		}
+		
+		return $this->_times;
+	}
+	
+	/*
+	 * Parse times from $this->_html
+	 *
+	 * @return bool
+	 *   Whether the HTML file has been successfully
+	 *   parsed or not
+	 */
+	protected function _parseTimes(){
+		$html = new DOMDocument();
+		@$html->loadHTML($this->_html);
+		$fonts = $html->getElementsByTagName('font');
+		if(empty($fonts) && $fonts->item(1)){
+			return false;
+		}
+		
+		$font = $fonts->item(1)->nodeValue;
+		$font = str_replace(' min.', 'min', $font);
+		$font = explode(' ', $font);
+		if (
+			$font[0] == 'Sosire1:' && 
+			($font[1] == '>>' || $font[1] == '**:**' || strtotime($font[1])) && 
+			$font[2] == 'Sosire2:' && 
+			($font[3] == '**:**' || strtotime($font[3]))
+		){
+			$this->_times = array(
+				array(
+					'time' => 
+						($font[1] == '>>') ? 
+						time() : 
+						(
+							($font[1] == '**:**') ?
+							null :
+							(
+								($this->_dayChanged($font[1])) ? 
+								strtotime('+1day '.$font[1]) : 
+								strtotime($font[1])
+							)
+						),
+					'type' => ($font[1] == '>>' || strstr($font[1], 'min')) ? 'M' : 'G'
+				),
+				array(
+					'time' => 
+						($font[3] == '**:**') ?
+						null :
+						(
+							($this->_dayChanged($font[3])) ? 
+							strtotime('+1day '.$font[3]) : 
+							strtotime($font[3])
+						),
+					'type' => (strstr($font[3], 'min')) ? 'M' : 'G'
+				)
+			);
+			return true;
+		} else {
+			return false;	
+		}
+	}
+	
+	/**
+	 * Save batch of times
+	 *
+	 * @param $method
+	 *   String representing the method in which
+	 *   the provided times should be processed
+	 * @param $times
+	 *   Array of times, specific to $method
+	 *
+	 * @return bool
+	 *   Whether the times have been saved or not
+	 */
+	public function saveTimes($method = 'fetch', $times = array()){
+		if (!in_array($method, $this->_methods)) {
+			return false;
+		}
+		
+		if (!empty($times)) {
+			$this->_processTimes($method, $times);
+		} elseif (!empty($this->_times)) {
+			$this->_processTimes($method, $this->_times);
+		} else {
+			return false;
+		}
+		
+		if (count($this->_times) > 1) {
+			return ($this->saveMany($this->_times)) ? $this->_times : false;	
+		} elseif(count($this->_times) == 1) {
+			return ($this->save($this->_times)) ? $this->_times : false;
+		} else {
+			return array();
+		}
+	}
+	
+	/**
+	 * Process batch of times
+	 *
+	 * @param $method
+	 *   String representing the method in which
+	 *   the provided times should be processed
+	 * @param $times
+	 *   Array of times, specific to $method
+	 */
+	protected function _processTimes($method, $times){
+		switch($method) {
+			case 'fetch':
+			
+				// Unset null times (e.g.: **:**)
+				foreach($times as $i => $time){
+					if (is_null($time['time'])) {
+						unset($time[$i]);	
+					}
+				}
+				
+				// If 'G' type times are very close (<5min),
+				// keep only the first one
+				if (
+					count($times) == 2 &&
+					count(Hash::extract($times, '{n}[type=G]')) == 2 &&
+					$times[1]['time'] - $times[0]['time'] < 5 * MINUTE
+				) {
+					unset($times[1]);
+				}
+				
+				// If first time is far from current time
+				// (>30min), don't keep the times
+				if(
+					count($times) > 0 &&
+					$times[0]['time'] - time() > 30 * MINUTE
+				){
+					$times = array();
+				}
+				
+				break;
+			case 'station_line_batch':
+				
+				break;
+			case 'line_follow':
+				
+				break;
+			case 'station_group_follow':
+				
+				break;
+			case 'gps':
+				
+				break;
+		}
+		
+		if (!empty($times)) {
+			foreach($times as &$time){
+				$time['station_id'] = $this->stationLine['Station']['id'];
+				$time['line_id'] = $this->stationLine['Line']['id'];
+				$time['day'] = $this->_dayType($time['time']);
+				$time['time'] = $this->_formatTime($time['time']);
+				if($occurances = $this->_timeOccurances($time['time'], $time['day'], $time['type'])){
+					$time['id'] = $occurances['Time']['id'];
+					$time['occurances'] = $occurances['Time']['occurances'] + 1;
+				}
+			}
+			unset($time);
+		}
+		
+		$this->_times = $times;
+	}
 	
 	/**
 	 * Process the add time form and build a 
@@ -389,153 +610,10 @@ class Time extends AppModel {
 		return compact('lines', 'global_coverage_percent');
 	}
 		
-	public function getTime($stationLineId = null){
-		if (!$this->stationLine = $this->Line->StationLine->find('first', array(
-			'conditions' => array('StationLine.id' => $stationLineId)
-		))) {
-			return false;
-		}
-		
-		if (!$this->_fetchTime()) {
-			$this->_logFileNotOpened();
-			return false;
-		}
-		
-		if (!$this->_parseTime()) {
-			$this->_logFileChanged();
-			return false;
-		}
-		
-		$this->_validateTime();
-		
-		$this->_processTime();
-		
-		if (!$this->_saveTime()) {
-			$this->_logTimeNotSaved();
-			return false;
-		}
-		
-		$this->_logTimeSaved();
-		return true;
-	}
 	
-	protected function _fetchTime(){
-		return $this->_html = file_get_contents(sprintf(
-			Configure::read('Ratt.url'), 
-			$this->stationLine['Line']['id_ratt'], 
-			$this->stationLine['Station']['id_ratt']
-		));
-	}
-	
-	protected function _parseTime(){
-		$html = new DOMDocument();
-		@$html->loadHTML($this->_html);
-		$fonts = $html->getElementsByTagName('font');
-		if(empty($fonts) && $fonts->item(1)){
-			return false;
-		}
-		
-		$font = $fonts->item(1)->nodeValue;
-		$font = str_replace(' min.', 'min', $font);
-		$font = explode(' ', $font);
-		if (
-			$font[0] == 'Sosire1:' && 
-			($font[1] == '>>' || strtotime($font[1]) || $font[1] == '**:**') && 
-			$font[2] == 'Sosire2:' && 
-			(strtotime($font[3]) || $font[3] == '**:**')
-		){
-			$this->_time = array(
-				array(
-					'time' => 
-						($font[1] == '>>') ? 
-						time() : 
-						(
-							($font[1] == '**:**') ?
-							null :
-							(
-								($this->_dayChanged($font[1])) ? 
-								strtotime('+1day '.$font[1]) : 
-								strtotime($font[1])
-							)
-						),
-					'type' => ($font[1] == '>>' || strstr($font[1], 'min')) ? 'M' : 'G'
-				),
-				array(
-					'time' => 
-						($font[3] == '**:**') ?
-						null :
-						(
-							($this->_dayChanged($font[3])) ? 
-							strtotime('+1day '.$font[3]) : 
-							strtotime($font[3])
-						),
-					'type' => (strstr($font[3], 'min')) ? 'M' : 'G'
-				)
-			);
-			return true;
-		} else {
-			return false;	
-		}
-	}
-	
-	protected function _validateTime(){
-		//unset null times (e.g.: **:**)
-		foreach($this->_time as $i => &$time){
-			if(is_null($time['time'])){
-				unset($this->_time[$i]);	
-			}
-		}
-		
-		//if times in graph mode are very close (~1-2 min), keep only the first one
-		if(
-			isset($this->_time[0]) &&
-			isset($this->_time[1]) &&
-			$this->_time[0]['type'] == 'G' && 
-			$this->_time[1]['type'] == 'G' && 
-			$this->_time[1]['time'] - $this->_time[0]['time'] < 3 * 60
-		){
-			unset($this->_time[1]);	
-		}
-		
-		//if first time is over 30mins than current time, don't save the times
-		if(
-			isset($this->_time[0]) &&
-			$this->_time[0]['time'] - time() > 30 * 60
-		){
-			unset($this->_time[0]);
-			if (isset($this->_time[1])) {
-				unset($this->_time[1]);
-			}
-		}
-	}
-	
-	protected function _processTime(){
-		if (!empty($this->_time)) {
-			foreach($this->_time as &$time){
-				$time['station_id'] = $this->stationLine['Station']['id'];
-				$time['line_id'] = $this->stationLine['Line']['id'];
-				$time['day'] = $this->_dayType($time['time']);
-				$time['time'] = $this->_formatTime($time['time']);
-				if($occurances = $this->_timeOccurances($time['time'], $time['day'], $time['type'])){
-					$time['id'] = $occurances['Time']['id'];
-					$time['occurances'] = $occurances['Time']['occurances'] + 1;
-				}
-			}
-			unset($time);
-		}
-	}
-	
-	protected function _saveTime(){
-		$this->time = $this->_time;
-		
-		if(count($this->_time) > 1){
-			return $this->saveMany($this->_time);	
-		} elseif(count($this->_time) == 1) {
-			return $this->save(array('Time' => array_shift(array_values($this->_time))));
-		} else {
-			return true;
-		}
-	}
+	/**
+	 * Utility functions
+	 */
 	
 	protected function _dayChanged($time){
 		if (
@@ -576,6 +654,31 @@ class Time extends AppModel {
 			return 'S';
 		} else{
 			return 'D';	
+		}
+	}
+	
+	/**
+	 * Formats any string of $time to
+	 * a valid database $format, optionally
+	 * including a $relative string
+	 */
+	protected function _formatTime($time, $relative = null){
+		$format = 'H:i';
+		
+		if (is_numeric($time)) {
+			return (!is_null($relative)) ? 
+				date($format, strtotime(date($format, (int)$time) . $relative)) : 
+				date($format, (int)$time);
+		} else {
+			if ($time === date($format, strtotime($time))) {
+				return (!is_null($relative)) ? 
+					date($format, strtotime($time . $relative)) : 
+					$time;
+			} else {
+				return (!is_null($relative)) ?
+					date($format, strtotime($time . $relative)) : 
+					date($format, strtotime($time));
+			}
 		}
 	}
 	
@@ -771,29 +874,8 @@ class Time extends AppModel {
 	}
 	
 	/**
-	 * Formats any string of $time to
-	 * a valid database $format, optionally
-	 * including a $relative string
+	 * Log methods
 	 */
-	protected function _formatTime($time, $relative = null){
-		$format = 'H:i';
-		
-		if (is_numeric($time)) {
-			return (!is_null($relative)) ? 
-				date($format, strtotime(date($format, (int)$time) . $relative)) : 
-				date($format, (int)$time);
-		} else {
-			if ($time === date($format, strtotime($time))) {
-				return (!is_null($relative)) ? 
-					date($format, strtotime($time . $relative)) : 
-					$time;
-			} else {
-				return (!is_null($relative)) ?
-					date($format, strtotime($time . $relative)) : 
-					date($format, strtotime($time));
-			}
-		}
-	}
 	
 	protected function _logFileNotOpened(){
 		$type = 'warning';

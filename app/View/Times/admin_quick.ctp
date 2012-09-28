@@ -35,14 +35,14 @@
 	</div>
 	
 	<div class="span6">
-		<?php if (isset($time) || isset($optimizedTime)): ?>
+		<?php if (isset($times) || isset($optimizedTime)): ?>
 			<table class="table table-striped table-bordered">
 				<tr>
 					<td class="span3">Timpii de la RATT</td>
 					<td>
-						<?php if (isset($time)): ?>
-							<?php foreach ($time as $time_item): ?>
-								<span class="label label-<?php echo h($time_item['type']); ?>"><?php echo $this->Time->format('H:i', strtotime(h($time_item['time']))); ?></span>
+						<?php if (!empty($times)): ?>
+							<?php foreach ($times as $time): ?>
+								<span class="label label-<?php echo h($time['type']); ?>"><?php echo $this->Time->format('H:i', strtotime(h($time['time']))); ?></span>
 							<?php endforeach; ?>
 						<?php endif; ?>
 					</td>
@@ -50,7 +50,7 @@
 				<tr>
 					<td>Timpul optimizat</td>
 					<td>
-						<?php if (isset($optimizedTime)): ?>
+						<?php if (!empty($optimizedTime)): ?>
 							<span class="label label-<?php echo h($optimizedTime['type']); ?>"><?php echo $this->Time->format('H:i', strtotime(h($optimizedTime['time']))); ?></span>
 						<?php endif; ?>
 					</td>
