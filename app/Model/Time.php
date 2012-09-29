@@ -1005,9 +1005,6 @@ class Time extends AppModel {
 	protected function _logTimeNotSaved(){
 		$type = 'warning';
 		$message = 'Timpii nu au putut fi salvati pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].' (<code>$stationLineId = '.$this->stationLine['StationLine']['id'].'</code>).';
-		if ($this->_html) {
-			$message .= ' Asa arata fisierul: <pre>'.h($this->_html).'</pre>';
-		}
 		$this->_logWrite($type, $message);
 	}
 	
@@ -1020,9 +1017,6 @@ class Time extends AppModel {
 			}
 		} else {
 			$message = 'Nu a fost niciun timp care sa trebuiasca sa fie salvat pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].'.';	
-		}
-		if ($this->_html) {
-			$message .= ' Asa arata fisierul: <pre>'.h($this->_html).'</pre>';
 		}
 		$this->_logWrite($type, $message);
 	}
