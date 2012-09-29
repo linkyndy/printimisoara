@@ -28,9 +28,10 @@ $(document).ready(function(){
 });
 
 function success(position) {
+	$container.html('');
 	$.getJSON(app.url + '/admin/stations/near_stations/' + position.coords.latitude + '/' + position.coords.longitude, function(data){
 		$.each(data.stationLines, function(key, value){
-			$container.html('<tr><td>' + value.Line.name + '</td><td>' + value.Station.name + ' <small class="muted">&rarr; ' + value.Station.direction + '</small></td><td><button class="geolocation-send-time btn btn-small" data-station-line-id="' + value.StationLine.id + '"><i class="icon-time"></i></button></td></tr>');
+			$container.append('<tr><td>' + value.Line.name + '</td><td>' + value.Station.name + ' <small class="muted">&rarr; ' + value.Station.direction + '</small></td><td><button class="geolocation-send-time btn btn-small" data-station-line-id="' + value.StationLine.id + '"><i class="icon-time"></i></button></td></tr>');
 		});
 	});
 	

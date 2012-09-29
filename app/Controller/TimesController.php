@@ -157,8 +157,8 @@ class TimesController extends AppController {
 			
 			$this->set('response', 
 				($times !== false) ? 
-				'<button class="btn btn-success"><i class="icon-ok icon-white"></i></button>' : 
-				'<button class="btn btn-danger"><i class="icon-warning-sign icon-white"></i></button>'
+				'<button class="btn btn-success btn-small"><i class="icon-ok icon-white"></i></button>' : 
+				'<button class="btn btn-danger btn-small"><i class="icon-warning-sign icon-white"></i></button>'
 			);
 			$this->set('_serialize', array('response'));
 		}
