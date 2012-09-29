@@ -119,37 +119,49 @@ class TimesController extends AppController {
 	 * previously saved table times for
 	 * the specific station, line and day.
 	 */
-	public function admin_add($type = 'U') {
+	public function admin_add($type = 'U', $method = 'station_line_batch') {
 		if (!in_array($type, array('U', 'T'))) {
 			throw new NotFoundException(__('Tip invalid'));
 		}
 		
 		if ($this->request->is('post')) {
-			$data = $this->Time->processAddTimes($this->request->data);
+			$times = $this->Time->saveTimes($method, $this->request->data);
 			
-			if ($data !== false) {
-				// Clear previously defined table times
-				if ($type == 'T') {
-					$clear = $this->Time->deleteAll(array(
-						'Time.station_id' => $data[0]['station_id'],
-						'Time.line_id' => $data[0]['line_id'],
-						'Time.day' => $data[0]['day'],
-						'Time.type' => 'T',
-					));
-				} else {
-					$clear = true;
-				}
-				
-				if ($clear && $this->Time->saveMany($data)) {
-					$this->Session->setFlash(__('Timpii au fost salvati!'), 'success');
-					$this->redirect(array('action' => 'index'));
-				}
+			if (
+				$times !== false &&
+				!empty($times)
+			) {
+				$this->Session->setFlash(__('Timpii au fost salvati!'), 'success');
+				$this->redirect(array('action' => 'index'));
 			}
 			$this->Session->setFlash(__('Timpii nu au putut fi salvati. Te rugam, incearca din nou.'), 'error');
 		}
 		
-		$this->set('station_line_list', $this->StationLine->formatStationLines());
-		$this->set('type', $type);
+		$station_line_list = $this->StationLine->formatStationLines();
+		$this->set(compact('type', 'method', 'station_line_list'));
+		
+		$this->render(strtolower('admin_add_' . $type . '_' . $method));
+	}
+	
+	/**
+	 * Add times which come from gps time user-input
+	 *
+	 * This method should only be called via ajax
+	 */
+	public function admin_add_gps(){
+		if (
+			$this->request->is('ajax') && 
+			$this->request->is('post')
+		) {
+			$times = $this->Time->saveTimes('gps', $this->request->data);
+			
+			$this->set('response', 
+				($times !== false) ? 
+				'<button class="btn btn-success"><i class="icon-ok icon-white"></i></button>' : 
+				'<button class="btn btn-danger"><i class="icon-warning-sign icon-white"></i></button>'
+			);
+			$this->set('_serialize', array('response'));
+		}
 	}
 
 	/*public function admin_edit($id = null) {

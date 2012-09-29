@@ -5,27 +5,12 @@
 </div>
 
 <div class="row-fluid">
-	<ul class="nav nav-tabs">
-		<li class="dropdown">
-			<a class="dropdown-toggle" data-toggle="dropdown" href="#">
-				Adaugă
-				<b class="caret"></b>
-			</a>
-			<ul class="dropdown-menu">
-				<li><?php echo $this->Html->link('din tabelă', array('controller' => 'times', 'action' => 'add', 'T'), array('escape' => false)); ?></li>
-				<li><?php echo $this->Html->link('de la utilizator', array('controller' => 'times', 'action' => 'add', 'U'), array('escape' => false)); ?></li>
-			</ul>
-		</li>
-		<li><?php echo $this->Html->link('Afla timp', array('controller' => 'times', 'action' => 'quick'), array('escape' => false)); ?></li>
-		<li><?php echo $this->Html->link('Ultimii timpi', array('controller' => 'times', 'action' => 'index'), array('escape' => false)); ?></li>
-		<li><?php echo $this->Html->link('Staţii', array('controller' => 'times', 'action' => 'stations'), array('escape' => false)); ?></li>
-		<li><?php echo $this->Html->link('Linii', array('controller' => 'times', 'action' => 'lines'), array('escape' => false)); ?></li>
-		<li><?php echo $this->Html->link('Acoperire', array('controller' => 'times', 'action' => 'coverage'), array('escape' => false)); ?></li>
-	</ul>
+	<?php echo $this->element('admin_time_submenu', array('active' => '')); ?>
 </div>
 
-<?php echo $this->Form->create('Time', array('class' => 'form-horizontal')); ?>
+<?php echo $this->Form->create('Time', array('url' => $this->request['url'], 'class' => 'form-horizontal')); ?>
 <?php echo $this->Form->hidden('type', array('value' => $type)); ?>
+<?php echo $this->Form->hidden('method', array('value' => $method)); ?>
 <div class="row-fluid">
 	<div class="span4">
 		<?php echo $this->Form->input('station_line', array('data-provide' => 'typeahead', 'data-source' => json_encode(array_values($station_line_list)), 'data-items' => 10, 'autocomplete' => 'off', 'placeholder' => 'Linia | Staţia', 'class' => 'span12', 'label' => false, 'div' => false)); ?>
@@ -40,11 +25,10 @@
 		</div>
 		<?php echo $this->Form->hidden('day', array('value' => 'L')); ?>
 		
-		<?php if ($type == 'T'): ?>
-			<hr>
-			<span class="label label-info">Nu uita!</span>
-			<small class="muted">Timpii adaugati acum ii vor suprascrie pe cei salvati pentru aceasta statie/linie/zi.</small>
-		<?php endif; ?>
+		<hr>
+		
+		<span class="label">?</span>
+		<small>Selecteaza o linie si o statie, tipul de zi, apoi scrie minutele in casuta corespunzatoare fiecarei ore.</small>
 	</div>
 
 	<div class="span4">

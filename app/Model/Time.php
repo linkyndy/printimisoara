@@ -134,10 +134,7 @@ class Time extends AppModel {
 	 *   false otherwise
 	 */
 	public function fetchTimes($stationLineId = null){
-		$this->Line->StationLine->recursive = 0;
-		if (!$this->stationLine = $this->Line->StationLine->find('first', array(
-			'conditions' => array('StationLine.id' => $stationLineId)
-		))) {
+		if (!$this->_loadStationLine($stationLineId)) {
 			return false;
 		}
 		
@@ -244,7 +241,7 @@ class Time extends AppModel {
 		if (count($this->_times) > 1) {
 			return ($this->saveMany($this->_times)) ? $this->_times : false;	
 		} elseif(count($this->_times) == 1) {
-			return ($this->save($this->_times)) ? $this->_times : false;
+			return ($this->save(array('Time' => $this->_times[0]))) ? $this->_times : false;
 		} else {
 			return array();
 		}
@@ -260,55 +257,14 @@ class Time extends AppModel {
 	 *   Array of times, specific to $method
 	 */
 	protected function _processTimes($method, $times){
-		switch($method) {
-			case 'fetch':
-			
-				// Unset null times (e.g.: **:**)
-				foreach($times as $i => $time){
-					if (is_null($time['time'])) {
-						unset($time[$i]);	
-					}
-				}
-				
-				// If 'G' type times are very close (<5min),
-				// keep only the first one
-				if (
-					count($times) == 2 &&
-					count(Hash::extract($times, '{n}[type=G]')) == 2 &&
-					$times[1]['time'] - $times[0]['time'] < 5 * MINUTE
-				) {
-					unset($times[1]);
-				}
-				
-				// If first time is far from current time
-				// (>30min), don't keep the times
-				if(
-					count($times) > 0 &&
-					$times[0]['time'] - time() > 30 * MINUTE
-				){
-					$times = array();
-				}
-				
-				break;
-			case 'station_line_batch':
-				
-				break;
-			case 'line_follow':
-				
-				break;
-			case 'station_group_follow':
-				
-				break;
-			case 'gps':
-				
-				break;
-		}
+		$callback = '_process' . ucfirst(Inflector::camelize($method)) . 'Times';
+		$times = $this->$callback($times);
 		
 		if (!empty($times)) {
 			foreach($times as &$time){
 				$time['station_id'] = $this->stationLine['Station']['id'];
 				$time['line_id'] = $this->stationLine['Line']['id'];
-				$time['day'] = $this->_dayType($time['time']);
+				$time['day'] = isset($time['day']) ? $time['day'] : $this->_dayType($time['time']);
 				$time['time'] = $this->_formatTime($time['time']);
 				if($occurances = $this->_timeOccurances($time['time'], $time['day'], $time['type'])){
 					$time['id'] = $occurances['Time']['id'];
@@ -319,6 +275,143 @@ class Time extends AppModel {
 		}
 		
 		$this->_times = $times;
+	}
+	
+	/**
+	 * Callback for processing fetch times 
+	 *
+	 * @param $times
+	 *   Times to be processed
+	 *
+	 * @return array
+	 *   Array of processed times
+	 *
+	 * @see $this->_processTimes()
+	 */
+	protected function _processFetchTimes($times){
+		// Unset null times (e.g.: **:**)
+		foreach($times as $i => $time){
+			if (is_null($time['time'])) {
+				unset($time[$i]);	
+			}
+		}
+		
+		// If 'G' type times are very close (<5min),
+		// keep only the first one
+		if (
+			count($times) == 2 &&
+			count(Hash::extract($times, '{n}[type=G]')) == 2 &&
+			$times[1]['time'] - $times[0]['time'] < 5 * MINUTE
+		) {
+			unset($times[1]);
+		}
+		
+		// If first time is far from current time
+		// (>30min), don't keep the times
+		if(
+			count($times) > 0 &&
+			$times[0]['time'] - time() > 30 * MINUTE
+		){
+			$times = array();
+		}
+		
+		return $times;
+	}
+	
+	/**
+	 * Callback for processing station_line_batch times 
+	 *
+	 * @param $times
+	 *   Times to be processed
+	 *
+	 * @return array
+	 *   Array of processed times
+	 *
+	 * @see $this->_processTimes()
+	 */
+	protected function _processStationLineBatchTimes($times){
+		$return = array();
+		
+		if (
+			!isset($times['Time']) ||
+			!isset($times['Time']['station_line']) ||
+			!isset($times['Time']['day']) ||
+			!isset($times['Time']['type']) || 
+			!isset($times['Time']['time']) ||
+			!$this->_loadStationLine($this->Station->StationLine->idFromStationLineName($times['Time']['station_line'])) ||
+			!in_array($times['Time']['day'], array('L', 'LV', 'S', 'D')) ||
+			count($times['Time']['time']) != 24
+		) {
+			return array();
+		}
+	
+		foreach ($times['Time']['time'] as $hour => $time) {
+			if (!isset($time['minutes'])) {
+				return array();
+			}
+			
+			if (empty($time['minutes'])) {
+				continue;	
+			}
+			
+			foreach (explode(' ', $time['minutes']) as $minute) {
+				if (
+					!is_numeric($minute) ||
+					strtotime($hour . ':' . $minute) === false
+				) {
+					return array();
+				}
+				
+				$return[] = array(
+					'time' => strtotime($hour . ':' . $minute),
+					'day' => $times['Time']['day'],
+					'type' => $times['Time']['type'],
+				);
+			}
+		}
+		
+		// Clear previously defined table times
+		if (
+			count($return) > 0 && 
+			$return[0]['type'] == 'T'
+		) {
+			$this->deleteAll(array(
+				'Time.station_id' => $this->stationLine['Station']['id'],
+				'Time.line_id' => $this->stationLine['Line']['id'],
+				'Time.day' => $return[0]['day'],
+				'Time.type' => 'T',
+			));
+		}
+		
+		return $return;
+	}
+	
+	/**
+	 * Callback for processing GPS times 
+	 *
+	 * @param $times
+	 *   Times to be processed
+	 *
+	 * @return array
+	 *   Array of processed times
+	 *
+	 * @see $this->_processTimes()
+	 */
+	protected function _processGpsTimes($times){
+		if (
+			!$this->_loadStationLine($times['station_line_id']) ||
+			strtotime($times['time']) === false
+		) {
+			$times = array();
+			break;
+		}
+		
+		return array(
+			array(
+				'time' => strtotime($times['time']),
+				'type' => 'U',
+			),
+		);
 	}
 	
 	/**
@@ -614,6 +707,18 @@ class Time extends AppModel {
 	/**
 	 * Utility functions
 	 */
+	 
+	protected function _loadStationLine($stationLineId){
+		$this->Line->StationLine->recursive = 0;
+		
+		if (!$this->stationLine = $this->Line->StationLine->find('first', array(
+			'conditions' => array('StationLine.id' => $stationLineId)
+		))) {
+			return false;
+		}
+		
+		return true;
+	}
 	
 	protected function _dayChanged($time){
 		if (
