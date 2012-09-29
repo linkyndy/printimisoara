@@ -239,12 +239,20 @@ class Time extends AppModel {
 		}
 		
 		if (count($this->_times) > 1) {
-			return ($this->saveMany($this->_times)) ? $this->_times : false;	
+			$return = ($this->saveMany($this->_times)) ? $this->_times : false;	
 		} elseif(count($this->_times) == 1) {
-			return ($this->save(array('Time' => $this->_times[0]))) ? $this->_times : false;
+			$return = ($this->save(array('Time' => $this->_times[0]))) ? $this->_times : false;
 		} else {
-			return array();
+			$return = array();
 		}
+		
+		if ($return !== false) {
+			$this->_logTimeSaved();
+		} else {
+			$this->_logTimeNotSaved();
+		}
+		
+		return $return;
 	}
 	
 	/**
@@ -996,19 +1004,25 @@ class Time extends AppModel {
 	
 	protected function _logTimeNotSaved(){
 		$type = 'warning';
-		$message = 'Timpii nu au putut fi salvati pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].' (<code>$stationLineId = '.$this->stationLine['StationLine']['id'].'</code>)';
+		$message = 'Timpii nu au putut fi salvati pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].' (<code>$stationLineId = '.$this->stationLine['StationLine']['id'].'</code>).';
+		if ($this->_html) {
+			$message .= ' Asa arata fisierul: <pre>'.h($this->_html).'</pre>';
+		}
 		$this->_logWrite($type, $message);
 	}
 	
 	protected function _logTimeSaved(){
 		$type = 'time-info';
-		if(count($this->_time) > 0){
+		if(count($this->_times) > 0){
 			$message = 'S-au salvat urmatorii timpi pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].': ';
-			foreach($this->_time as $time){
-				$message .= '<code>'.$time['time'].' '.$time['day'].'</code><code>'.$time['type'].'</code>';	
+			foreach($this->_times as $time){
+				$message .= '<code>'.$time['time'].' '.$time['day'].'</code><code>'.$time['type'].'</code>.';	
 			}
 		} else {
 			$message = 'Nu a fost niciun timp care sa trebuiasca sa fie salvat pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].'.';	
+		}
+		if ($this->_html) {
+			$message .= ' Asa arata fisierul: <pre>'.h($this->_html).'</pre>';
 		}
 		$this->_logWrite($type, $message);
 	}
