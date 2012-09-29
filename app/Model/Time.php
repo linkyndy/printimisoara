@@ -300,7 +300,7 @@ class Time extends AppModel {
 		// Unset null times (e.g.: **:**)
 		foreach($times as $i => $time){
 			if (is_null($time['time'])) {
-				unset($time[$i]);	
+				unset($times[$i]);	
 			}
 		}
 		
