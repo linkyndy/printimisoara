@@ -3,7 +3,7 @@ App::uses('AppController', 'Controller');
 
 class StationsController extends AppController {
 	
-	public $uses = array('Station', 'Suggestion');
+	public $uses = array('Station', 'StationLine', 'Suggestion');
 	
 /**
  * Everybody
@@ -27,6 +27,37 @@ class StationsController extends AppController {
 		$this->Station->recursive = 0;
 		$this->set('stations', $this->paginate('Station', array('Station.node' => 1)));
 		$this->set('station_list', $this->Station->find('list', array('fields' => array('Station.name_direction'), 'conditions' => array('Station.node' => 1))));
+	}
+	
+	/**
+	 * Get a list of stations that are near
+	 * the provided coordinates
+	 *
+	 * This method should only be called via ajax
+	 */
+	public function admin_near_stations($lat, $lng){
+		if ($this->request->is('ajax')) {
+			$stations = $this->Station->nearStations(array(
+				'lat' => $lat,
+				'lng' => $lng,
+			));
+			$stationLines = $this->StationLine->find('all', array(
+				'conditions' => array(
+					'StationLine.station_id' => $stations,
+				),
+				'fields' => array('StationLine.id', 'StationLine.station_id', 'StationLine.line_id'),
+				'contain' => array(
+					'Station' => array(
+						'fields' => array('Station.id', 'Station.name', 'Station.direction')
+					),
+					'Line' => array(
+						'fields' => array('Line.id', 'Line.name', 'Line.colour'),
+					),
+				),
+			));
+			$this->set('stationLines', $stationLines);
+			$this->set('_serialize', array('stationLines'));
+		}
 	}
 
 	public function admin_search() {

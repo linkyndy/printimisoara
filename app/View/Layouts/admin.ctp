@@ -56,6 +56,7 @@
 		<?php echo $this->Html->script('libs/bootstrap'); ?>
 		<?php echo $this->Html->script('script'); ?>
 		<?php echo $this->fetch('script'); ?>
+		<?php echo $this->Js->set('url', $this->request->base); ?>
 		<?php echo $this->Js->writeBuffer(); ?>
 		<?php echo $this->fetch('css'); ?>
   </body>

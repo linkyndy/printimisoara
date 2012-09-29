@@ -19,6 +19,13 @@ $(document).ready(function(){
 		$('input#' + $(this).parent().attr('data-hidden')).val($(this).val());
 	});
 	
+	// Input the current time
+	$('button.now').click(function(){
+		$nowInput = $(this).siblings('input[data-now]');
+		$now = new Date();
+		$nowInput.val($nowInput.val() + ' ' + $now.getHours() + ':' + $now.getMinutes());
+	});
+	
 	//$(".accordion").accordion();
 	
 	/*mapStyle();

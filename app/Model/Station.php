@@ -180,8 +180,18 @@ class Station extends AppModel {
 	public $radius;
 	public $stationLine = array();
 	
+	/**
+	 * Get all stations within the default radius
+	 * of the given coordinates
+	 *
+	 * @param $coords
+	 *   Array of coordinates
+	 *
+	 * @return mixed
+	 *   Array of found stations, false otherwise
+	 */
 	public function nearStations($coords = array()){
-		if(!$this->_validCoords($coords)){
+		if (!$this->_validCoords($coords)){
 			$this->_logInvalidCoords();
 			return false;	
 		}
@@ -202,17 +212,18 @@ class Station extends AppModel {
 			)
 		';
 		
-		do{
+		do {
 			$stationGroupId = $this->field('station_group_id', array(
 				'Station.distance <=' => $this->radius,
 			), 'Station.distance ASC');	
-		}while(
+		} while(
 			$stationGroupId === false && 
 			$this->radius <= 1000 && 
 			$this->radius += 100
 		);
 		
-		$results = $this->find('all', array(
+		$results = $this->find('list', array(
+			'fields' => array('Station.id'),
 			'conditions' => array('Station.station_group_id' => $stationGroupId),
 			'order' => 'Station.distance ASC'
 		));
