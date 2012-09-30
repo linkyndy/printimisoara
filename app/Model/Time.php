@@ -87,26 +87,7 @@ class Time extends AppModel {
 	 * HTML fetched containing times to be parsed
 	 */
 	protected $_html = null;
-	
-	/** 
-	 * Contains times fetched from RATT with
-	 * $this->getTime() or times fetched from
-	 * the database with $this->getOptimizedTime()
-	 */
-	//protected $_time = null;
-	
-	/**
-	 * Contains times fetched from RATT for
-	 * public access
-	 */
-	//public $time = null;
-	
-	/**
-	 * Contains optimized time for public
-	 * access
-	 */
-	//public $optimizedTime = null;
-	
+		
 	/**
 	 * Currently processed times for saving
 	 */
@@ -423,70 +404,15 @@ class Time extends AppModel {
 	}
 	
 	/**
-	 * Process the add time form and build a 
-	 * proper array to be saved in the database
-	 */
-	public function processAddTimes($form){
-		$return = array();
-		
-		if (!isset($form['Time'])) {
-			return false;
-		} elseif (
-			!isset($form['Time']['station_line']) ||
-			!isset($form['Time']['day']) ||
-			!isset($form['Time']['type']) || 
-			!isset($form['Time']['time'])
-		) {
-			return false;
-		}
-		
-		if(!$this->stationLine = $this->Line->StationLine->find('first', array(
-			'conditions' => array('StationLine.id' => $this->Station->StationLine->idFromStationLineName($form['Time']['station_line']))
-		))){
-			return false;
-		}
-		
-		if (!in_array($form['Time']['day'], array('L', 'LV', 'S', 'D'))) {
-			return false;
-		}
-		
-		if (count($form['Time']['time']) != 24) {
-			return false;
-		}
-		foreach ($form['Time']['time'] as $hour => $time) {
-			if (!isset($time['minutes'])) {
-				return false;
-			}
-			
-			if (empty($time['minutes'])) {
-				continue;	
-			}
-			
-			foreach (explode(' ', $time['minutes']) as $minute) {
-				if (!is_numeric($minute)) {
-					return false;
-				}
-				
-				$return_item = array(
-					'station_id' => $this->stationLine['Station']['id'],
-					'line_id' => $this->stationLine['Line']['id'],
-					'time' => date('H:i', strtotime($hour . ':' . $minute)),
-					'day' => $form['Time']['day'],
-					'type' => $form['Time']['type'],
-				);
-				
-				if($occurances = $this->_timeOccurances($return_item['time'], $return_item['day'], $return_item['type'])){
-					$return_item['id'] = $occurances['Time']['id'];
-					$return_item['occurances'] = $occurances['Time']['occurances'] + 1;
-				}
-				
-				$return[] = $return_item;
-			}
-		}
-		
-		return (!empty($return)) ? $return : false;
-	}
-	
+	 * Retrieves all times for a station
+	 *
+	 * @param $station_id
+	 *   ID of the station
+	 *
+	 * @return array
+	 *   Array of times, grouped by line,
+	 *   day, hour and minute
+	 */	
 	public function station($station_id = null){
 		$this->Station->id = $station_id;
 		if (!$this->Station->exists()) {
@@ -510,7 +436,7 @@ class Time extends AppModel {
 			if (isset($times[0]['Line'])) {
 				$station[] = array(
 					'Line'  => $times[0]['Line'],
-					'Time' => $this->__groupByHoursAndDay($times),
+					'Time' => $this->_groupByHoursAndDay($times),
 				);
 			}
 		}
@@ -518,8 +444,18 @@ class Time extends AppModel {
 		return $station;
 	}
 	
-	public function line($line = null){
-		$this->Line->id = $line;
+	/**
+	 * Retrieves all times for a line
+	 *
+	 * @param $line_id
+	 *   ID of the line
+	 *
+	 * @return array
+	 *   Array of times, grouped by direction,
+	 *   station, day, hour and minute
+	 */	
+	public function line($line_id = null){
+		$this->Line->id = $line_id;
 		if(!$this->Line->exists()){
 			throw new NotFoundException(__('Linie invalida'));
 		}
@@ -528,13 +464,16 @@ class Time extends AppModel {
 		foreach($directions as &$direction){
 			foreach($direction as &$station){
 				$times = $this->find('all', array('conditions' => array('Time.station_id' => $station['Station']['id'], 'Time.line_id' => $line), 'order' => 'Time.time ASC'));
-				$station['Time'] = $this->__groupByHoursAndDay($times);	
+				$station['Time'] = $this->_groupByHoursAndDay($times);	
 			}
 		}
 		return $directions;
 	}
 	
-	private function __groupByHoursAndDay($times){
+	/**
+	 * Formats an array of times by hour and day
+	 */
+	protected function _groupByHoursAndDay($times){
 		$hoursAndDay = array();
 		for($i = 0; $i <= 23; $i++){
 			foreach(array('L', 'LV', 'S', 'D') as $day){

@@ -45,9 +45,6 @@ class TimesController extends AppController {
 						$this->set('times', $times);
 					}
 				}
-				/*if ($this->Time->getOptimizedTime($station_line_id)) {
-					$this->set('optimizedTime', $this->Time->optimizedTime);
-				}*/
 			}
 		}
 		
