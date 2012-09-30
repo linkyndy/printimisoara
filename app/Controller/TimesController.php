@@ -140,6 +140,9 @@ class TimesController extends AppController {
 		$station_line_list = $this->StationLine->formatStationLines();
 		$this->set(compact('type', 'method', 'station_line_list'));
 		
+		if ($method == 'gps') {
+			$this->layout = 'mobile';
+		}
 		$this->render(strtolower('admin_add_' . $type . '_' . $method));
 	}
 	
