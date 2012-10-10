@@ -104,6 +104,12 @@ class Time extends AppModel {
 		'gps'
 	);
 	
+	/**
+	 * Flag reflecting whether the current iteration
+	 * in fetch recursive is the first one or not
+	 */
+	protected $_fetchRecursiveFirstIteration = true;
+	
 	/*
 	 * Fetch times for a specific station line
 	 *
@@ -401,6 +407,259 @@ class Time extends AppModel {
 				'type' => 'U',
 			),
 		);
+	}
+	
+	/**
+	 * Get time for a specific station line,
+	 * optionally filtered by time and day
+	 *
+	 * @param $options
+	 *   Options array, can contain thw following:
+	 *   - $time around which to return the time
+	 *   - $day of the time
+	 */
+	public function getTime($stationLineId = null, $options = array()){
+		if (!$this->_loadStationLine($stationLineId)) {
+			return false;
+		}
+		
+		$defaults = array(
+			'time' => time(),
+			'day' => $this->_dayType(isset($options['time']) ? $options['time'] : time()),
+		);
+		$options += $defaults;
+		
+		if ($this->_canFetchRecursive($options)) {
+			$this->_fetchRecursive($stationLineId, $options['time']);
+		}
+	}
+	
+	/**
+	 * Check whether times can be fetched recursively
+	 *
+	 * Basically, times can be fetched recursively if
+	 * there is at least one M-type time which is later
+	 * than the desired time.
+	 *
+	 * @param $options
+	 *   Array of options passed from $this->getTime()
+	 *
+	 * @return bool
+	 *   Whether times can be fetched recursively or not
+	 *
+	 * @see $this->getTime()
+	 */
+	protected function _canFetchRecursive($options){
+		$stationLineId = $this->stationLine['StationLine']['id'];
+		
+		if ($this->fetchTimes($stationLineId)) {
+			$this->saveTimes();
+			
+			if (!empty($this->_times)) {
+				$mTypes = Hash::extract($this->_times, '{n}[type=M]');
+				if (!empty($mTypes)) {
+					$mTypesSorted = Hash::sort($mTypes, '{n}.time', 'asc');
+					$time = strtotime($mTypesSorted[0]['time']);
+					
+					return $time 
+					if ($time > $refTime) {
+						$nextStationLineId = $this->Station->StationLine->FollowingStationLine->one($stationLineId);
+						$this->_fetchRecursive($nextStationLineId, $time);
+					}
+				}
+			}
+		}
+	}
+	
+	/**
+	 * Get optimized time for a specific
+	 * station_line_id
+	 *
+	 * The time fetched with getTime() gets
+	 * compared to data from the database
+	 * and filtered to some algorithms before
+	 * it is returned.
+	 *
+	 * $options array can contain:
+	 * - $time around which to return the time
+	 * - $day of the time
+	 */
+	public function getOptimizedTime($stationLineId = null, $options = array()){
+		if (!$this->stationLine = $this->Line->StationLine->find('first', array(
+			'conditions' => array('StationLine.id' => $stationLineId)
+		))){
+			return false;
+		}
+		
+		$defaults = array(
+			'time' => time(),
+			'day' => $this->_dayType(time()),
+		);
+		$options += $defaults;
+		
+		if (!$this->getTime($stationLineId)) {
+			$this->_logRattNotFetched();
+			return false;
+		}
+		
+		$this->_fetchDbTimes($options);
+		
+		if (!$this->_optimizeTimes()) {
+			$this->_logOptimizeFail();
+			return false;
+		}
+		
+		return true;
+	}
+	
+	protected function _fetchDbTimes($options){
+		$this->recursive = -1;
+		
+		// Just-fetched times from RATT are
+		// already saved in the database
+		$this->_time = array();
+		
+		// Fetch first G or T type time which is 
+		// greater or equal than requested time.
+		// Skip to midnight if none is found until then
+		$midnight = false;
+		do	{
+			$first = $this->find('first', array(
+				'conditions' => array(
+					'Time.station_id' => $this->stationLine['Station']['id'],
+					'Time.line_id' => $this->stationLine['Line']['id'],
+					'Time.time >=' =>  
+						($midnight === true) ? 
+							$this->_formatTime('midnight') : 
+							$this->_formatTime($options['time'])
+					,
+					'Time.day' => $options['day'],
+					'Time.type' => array('G', 'T'),
+				),
+				'order' => 'Time.time ASC',
+			));
+		} while(
+			empty($first) &&
+			$midnight === false &&
+			$midnight = true
+		);
+		$this->_time[] = $first['Time'];
+		
+		// Fetch M or U type times which are within
+		// a specific minute-radius from the time above
+		$midnight = false;
+		do	{
+			$sooner = $this->find('all', array(
+				'conditions' => array(
+					'Time.station_id' => $this->stationLine['Station']['id'],
+					'Time.line_id' => $this->stationLine['Line']['id'],
+					'Time.time <=' => 
+						($midnight === true) ? 
+							$this->_formatTime('midnight', '-1second') : 
+							$this->_formatTime($first['Time']['time'])
+					,
+					'Time.time >=' => 
+						($midnight === true) ?
+							$this->_formatTime('midnight', '-1second-3minutes') :
+							(
+								(strtotime($first['Time']['time'].'-3minutes') > $options['time']) ?
+								$this->_formatTime($first['Time']['time'], '-3minutes') :
+								$this->_formatTime($options['time'])
+							)
+					,
+					'Time.day' => $options['day'],
+					'Time.type' => array('M', 'U'),
+				),
+			));
+		} while(
+			empty($sooner) &&
+			$midnight === false &&
+			$midnight = true
+		);
+		foreach ($sooner as $time) {
+			$this->_time[] = $time['Time'];
+		}
+		
+		$midnight = false;
+		do	{
+			$later = $this->find('all', array(
+				'conditions' => array(
+					'Time.station_id' => $this->stationLine['Station']['id'],
+					'Time.line_id' => $this->stationLine['Line']['id'],
+					'Time.time >' => 
+						($midnight === true) ? 
+							$this->_formatTime('midnight') : 
+							$this->_formatTime($first['Time']['time'])
+					,
+					'Time.time <=' => 
+						($midnight === true) ? 
+							$this->_formatTime('midnight', '+3minutes') : 
+							$this->_formatTime($first['Time']['time'], '+3minutes')
+					,
+					'Time.day' => $options['day'],
+					'Time.type' => array('M', 'U'),
+				),
+			));
+		} while(
+			empty($later) &&
+			$midnight === false &&
+			$midnight = true
+		);
+		foreach ($later as $time) {
+			$this->_time[] = $time['Time'];
+		}
+	}
+	
+	protected function _optimizeTimes(){
+		$this->_time = Hash::sort($this->_time, '{n}.time', 'asc');
+		
+		// Map minutes to indexes to ease 
+		// finding the optimized time
+		foreach ($this->_time as $i => &$time) {
+			($i == 0) ?
+				$time['index'] = 0 :
+				$time['index'] = $this->_time[$i - 1]['index'] + (int)date('i', strtotime($time['time']) - strtotime($this->_time[$i - 1]['time']));
+		}
+		unset($time);
+		
+		$type_weights = array(
+			'G' => 0.7,
+			'M' => 0.9,
+			'U' => 0.5,
+			'T' => 0.65,
+		);
+		
+		$occurance_weights = array(
+			'G' => 0.1,
+			'M' => 0.75,
+			'U' => 0.9,
+			'T' => 0.05,
+		);
+		
+		$optimized_index = array('sum' => 0, 'weights' => 0);
+		foreach ($this->_time as $time) {
+			$optimized_index['sum'] += 
+				$time['index'] * 
+				$type_weights[$time['type']] * 
+				$time['occurances'] * 
+				$occurance_weights[$time['type']]
+			;
+			$optimized_index['weights'] += 
+				$type_weights[$time['type']] * 
+				$time['occurances'] * 
+				$occurance_weights[$time['type']]
+			;
+		}
+		$optimized_index = round($optimized_index['sum'] / $optimized_index['weights']);
+		
+		foreach ($this->_time as $time) {
+			if ($time['index'] == $optimized_index) {
+				$this->optimizedTime = $time;
+				return true;
+			}
+		}
+		
+		return false;
 	}
 	
 	/**
@@ -732,197 +991,6 @@ class Time extends AppModel {
 					date($format, strtotime($time));
 			}
 		}
-	}
-	
-	/**
-	 * Get optimized time for a specific
-	 * station_line_id
-	 *
-	 * The time fetched with getTime() gets
-	 * compared to data from the database
-	 * and filtered to some algorithms before
-	 * it is returned.
-	 *
-	 * $options array can contain:
-	 * - $time around which to return the time
-	 * - $day of the time
-	 */
-	public function getOptimizedTime($stationLineId = null, $options = array()){
-		if (!$this->stationLine = $this->Line->StationLine->find('first', array(
-			'conditions' => array('StationLine.id' => $stationLineId)
-		))){
-			return false;
-		}
-		
-		$defaults = array(
-			'time' => time(),
-			'day' => $this->_dayType(time()),
-		);
-		$options += $defaults;
-		
-		if (!$this->getTime($stationLineId)) {
-			$this->_logRattNotFetched();
-			return false;
-		}
-		
-		$this->_fetchDbTimes($options);
-		
-		if (!$this->_optimizeTimes()) {
-			$this->_logOptimizeFail();
-			return false;
-		}
-		
-		return true;
-	}
-	
-	protected function _fetchDbTimes($options){
-		$this->recursive = -1;
-		
-		// Just-fetched times from RATT are
-		// already saved in the database
-		$this->_time = array();
-		
-		// Fetch first G or T type time which is 
-		// greater or equal than requested time.
-		// Skip to midnight if none is found until then
-		$midnight = false;
-		do	{
-			$first = $this->find('first', array(
-				'conditions' => array(
-					'Time.station_id' => $this->stationLine['Station']['id'],
-					'Time.line_id' => $this->stationLine['Line']['id'],
-					'Time.time >=' =>  
-						($midnight === true) ? 
-							$this->_formatTime('midnight') : 
-							$this->_formatTime($options['time'])
-					,
-					'Time.day' => $options['day'],
-					'Time.type' => array('G', 'T'),
-				),
-				'order' => 'Time.time ASC',
-			));
-		} while(
-			empty($first) &&
-			$midnight === false &&
-			$midnight = true
-		);
-		$this->_time[] = $first['Time'];
-		
-		// Fetch M or U type times which are within
-		// a specific minute-radius from the time above
-		$midnight = false;
-		do	{
-			$sooner = $this->find('all', array(
-				'conditions' => array(
-					'Time.station_id' => $this->stationLine['Station']['id'],
-					'Time.line_id' => $this->stationLine['Line']['id'],
-					'Time.time <=' => 
-						($midnight === true) ? 
-							$this->_formatTime('midnight', '-1second') : 
-							$this->_formatTime($first['Time']['time'])
-					,
-					'Time.time >=' => 
-						($midnight === true) ?
-							$this->_formatTime('midnight', '-1second-3minutes') :
-							(
-								(strtotime($first['Time']['time'].'-3minutes') > $options['time']) ?
-								$this->_formatTime($first['Time']['time'], '-3minutes') :
-								$this->_formatTime($options['time'])
-							)
-					,
-					'Time.day' => $options['day'],
-					'Time.type' => array('M', 'U'),
-				),
-			));
-		} while(
-			empty($sooner) &&
-			$midnight === false &&
-			$midnight = true
-		);
-		foreach ($sooner as $time) {
-			$this->_time[] = $time['Time'];
-		}
-		
-		$midnight = false;
-		do	{
-			$later = $this->find('all', array(
-				'conditions' => array(
-					'Time.station_id' => $this->stationLine['Station']['id'],
-					'Time.line_id' => $this->stationLine['Line']['id'],
-					'Time.time >' => 
-						($midnight === true) ? 
-							$this->_formatTime('midnight') : 
-							$this->_formatTime($first['Time']['time'])
-					,
-					'Time.time <=' => 
-						($midnight === true) ? 
-							$this->_formatTime('midnight', '+3minutes') : 
-							$this->_formatTime($first['Time']['time'], '+3minutes')
-					,
-					'Time.day' => $options['day'],
-					'Time.type' => array('M', 'U'),
-				),
-			));
-		} while(
-			empty($later) &&
-			$midnight === false &&
-			$midnight = true
-		);
-		foreach ($later as $time) {
-			$this->_time[] = $time['Time'];
-		}
-	}
-	
-	protected function _optimizeTimes(){
-		$this->_time = Hash::sort($this->_time, '{n}.time', 'asc');
-		
-		// Map minutes to indexes to ease 
-		// finding the optimized time
-		foreach ($this->_time as $i => &$time) {
-			($i == 0) ?
-				$time['index'] = 0 :
-				$time['index'] = $this->_time[$i - 1]['index'] + (int)date('i', strtotime($time['time']) - strtotime($this->_time[$i - 1]['time']));
-		}
-		unset($time);
-		
-		$type_weights = array(
-			'G' => 0.7,
-			'M' => 0.9,
-			'U' => 0.5,
-			'T' => 0.65,
-		);
-		
-		$occurance_weights = array(
-			'G' => 0.1,
-			'M' => 0.75,
-			'U' => 0.9,
-			'T' => 0.05,
-		);
-		
-		$optimized_index = array('sum' => 0, 'weights' => 0);
-		foreach ($this->_time as $time) {
-			$optimized_index['sum'] += 
-				$time['index'] * 
-				$type_weights[$time['type']] * 
-				$time['occurances'] * 
-				$occurance_weights[$time['type']]
-			;
-			$optimized_index['weights'] += 
-				$type_weights[$time['type']] * 
-				$time['occurances'] * 
-				$occurance_weights[$time['type']]
-			;
-		}
-		$optimized_index = round($optimized_index['sum'] / $optimized_index['weights']);
-		
-		foreach ($this->_time as $time) {
-			if ($time['index'] == $optimized_index) {
-				$this->optimizedTime = $time;
-				return true;
-			}
-		}
-		
-		return false;
 	}
 	
 	/**

@@ -60,6 +60,18 @@ class FollowingStationLine extends AppModel {
 		)
 	);
 	
+	/**
+	 * Fetch the next station line after the given
+	 *
+	 * @param $stationLineId
+	 *   Reference station line
+	 */
+	public function one($stationLineId){
+		return $this->find('first', array(
+			'conditions' => array('FollowingStationLine.reference_station_line_id' => $stationLineId),
+		));
+	}
+	
 	public function compute($lineIds = array()){
 		if(!is_array($lineIds)){
 			$this->_logInvalidLineArray();

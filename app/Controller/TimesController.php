@@ -25,6 +25,7 @@ class TimesController extends AppController {
  */
 
 	public function admin_index() {
+		$this->Time->getTime(1);
 		$this->Time->recursive = 0;
 		$this->set('times', $this->paginate());
 		$this->set('station_line_list', $this->StationLine->formatStationLines());
