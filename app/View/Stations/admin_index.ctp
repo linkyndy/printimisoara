@@ -16,6 +16,7 @@
 			<?php echo $this->Html->link(__('<i class="icon-briefcase"></i> Grupuri de staţii'), array('controller' => 'station_groups', 'action' => 'index'), array('class' => 'btn', 'escape' => false)); ?>
 			<?php echo $this->Html->link(__('<i class="icon-random"></i> Polylines'), array('controller' => 'station_connections', 'action' => 'index'), array('class' => 'btn', 'escape' => false)); ?>
 			<?php echo $this->Html->link(__('<i class="icon-screenshot"></i> Points'), array('controller' => 'station_points', 'action' => 'index'), array('class' => 'btn', 'escape' => false)); ?>
+			<?php echo $this->Html->link(__('<i class="icon-resize-horizontal"></i> Distanţe'), array('controller' => 'station_distances', 'action' => 'index'), array('class' => 'btn', 'escape' => false)); ?>
 			<!--<?php echo $this->Html->link(__('<i class="icon-share-alt"></i> Refa cache-ul statiilor urmatoare'), array('controller' => 'following_station_lines', 'action' => 'compute'), array('class' => 'btn', 'escape' => false)); ?>-->
 		</div>
 	<?php echo $this->Form->end(); ?>
