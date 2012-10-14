@@ -461,7 +461,7 @@ class Time extends AppModel {
 					$mTypesSorted = Hash::sort($mTypes, '{n}.time', 'asc');
 					$time = strtotime($mTypesSorted[0]['time']);
 					
-					return $time 
+					return $time; 
 					if ($time > $refTime) {
 						$nextStationLineId = $this->Station->StationLine->FollowingStationLine->one($stationLineId);
 						$this->_fetchRecursive($nextStationLineId, $time);

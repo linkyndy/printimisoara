@@ -1,0 +1,2 @@
+1350173431
+a:5:{s:2:"id";a:5:{s:4:"type";s:7:"integer";s:4:"null";b:0;s:7:"default";N;s:6:"length";i:11;s:3:"key";s:7:"primary";}s:14:"vacation_start";a:4:{s:4:"type";s:4:"date";s:4:"null";b:0;s:7:"default";N;s:6:"length";N;}s:12:"vacation_end";a:4:{s:4:"type";s:4:"date";s:4:"null";b:0;s:7:"default";N;s:6:"length";N;}s:20:"near_stations_radius";a:4:{s:4:"type";s:7:"integer";s:4:"null";b:0;s:7:"default";N;s:6:"length";i:11;}s:10:"day_change";a:4:{s:4:"type";s:4:"time";s:4:"null";b:0;s:7:"default";s:8:"01:00:00";s:6:"length";N;}}
