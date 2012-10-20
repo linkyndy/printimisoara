@@ -42,6 +42,9 @@ class AppController extends Controller {
 		$this->loadModel('Config');
 		$this->Config->getConfig();
 		
+		$this->loadModel('Maintenance');
+		$this->Maintenance->getMaintenance();
+		
 		$this->Auth->loginAction = array('admin' => false, 'superuser' => false, 'controller' => 'users', 'action' => 'login');
 		$this->Auth->authorize = array('Controller');
 		

@@ -994,6 +994,89 @@ class Time extends AppModel {
 	}
 	
 	/**
+	 * Cron functions
+	 */
+	
+	/**
+	 * Fetch times for a specific station line.
+	 * 
+	 * @param $stationLineId
+	 *   ID of the station line; if ommited, times
+	 *   for a random station line will be fetched.
+	 * @param $uncovered
+	 *   Whether times should be fetched for an
+	 *   uncovered line or not.
+	 */
+	public function fetchStationLineTimes($stationLineId = null, $uncovered = true){
+		if (is_null($stationLineId)){
+			if ($uncovered === true){
+				$uncoveredLines = Configure::read('Maintenance.uncovered_lines');
+				
+				$stationLineId = $this->Station->StationLine->field('id', array('line_id' => array_rand($uncoveredLines)), 'rand()');
+			} else {
+				$stationLineId = $this->Station->StationLine->field('id', array(), 'rand()');
+			}
+			
+		}
+		
+		if ($this->fetchTimes($stationLineId)) {
+			return $this->saveTimes();
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Fetch times for a specific line.
+	 * 
+	 * @param $lineId
+	 *   ID of the line; if ommited, times
+	 *   for a random line will be fetched.
+	 * @param $uncovered
+	 *   Whether times should be fetched for an
+	 *   uncovered line or not.
+	 */
+	public function fetchLineTimes($lineId = null, $uncovered = true){
+		$this->Station->StationLine->recursive = 0;
+		
+		if (is_null($lineId)){
+			if ($uncovered === true){
+				$uncoveredLines = Configure::read('Maintenance.uncovered_lines');
+				
+				$stationLines = $this->Station->StationLine->find('all', array(
+					'conditions' => array('StationLine.line_id' => array_rand($uncoveredLines)),
+					'order' => 'StationLine.order ASC',
+				));
+			} else {
+				$stationLines = $this->Station->StationLine->find('all', array(
+					'conditions' => array('StationLine.line_id' => $this->Line->field('id', array(), 'rand()')),
+					'order' => 'StationLine.order ASC',
+				));
+			}
+		} else {
+			$stationLines = $this->Station->StationLine->find('all', array(
+				'conditions' => array('StationLine.line_id' => $lineId),
+				'order' => 'StationLine.order ASC',
+			));
+		}
+		
+		if (!empty($stationLines)){
+			foreach ($stationLines as $stationLine) {
+				if ($this->fetchTimes($stationLine['StationLine']['id'])) {
+					$times = $this->saveTimes();
+
+					if ($times === false){
+						return false;
+					}
+				}
+			}
+		}
+		
+		return true;
+	}
+	
+	
+	/**
 	 * Log methods
 	 */
 	

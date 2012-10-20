@@ -17,7 +17,7 @@ class MaintenanceShell extends AppShell {
 		CakeLog::write('info', '3');
 		$ids_coverage = array_slice($sorted_coverage, 0, 5);
 		CakeLog::write('info', '4');
-		$string_coverage = implode(', ', $ids_coverage);
+		$string_coverage = implode(',', $ids_coverage);
 		CakeLog::write('info', '5');
 		CakeLog::write('info', '6');
 		CakeLog::write('info', $string_coverage);

@@ -22,4 +22,12 @@ class Maintenance extends AppModel {
 	public function set($key, $value){
 		return $this->save(array('Maintenance' => array('id' => 1, $key => $value)));
 	}
+	
+	public function getMaintenance(){
+		$maintenance = $this->find();
+		
+		$maintenance['Maintenance']['uncovered_lines'] = explode(',', $maintenance['Maintenance']['uncovered_lines']);
+		
+		Configure::write('Maintenance', $maintenance['Maintenance']);
+	}
 }
