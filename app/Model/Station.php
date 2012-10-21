@@ -174,7 +174,20 @@ class Station extends AppModel {
 			'finderQuery' => '',
 			'counterQuery' => ''
 		),
-		'FromStationDistance' => array(
+		'StationDistance' => array(
+			'className' => 'StationDistance',
+			'foreignKey' => 'from_station_id',
+			'dependent' => true,
+			'conditions' => '',
+			'fields' => '',
+			'order' => '',
+			'limit' => '',
+			'offset' => '',
+			'exclusive' => '',
+			'finderQuery' => '',
+			'counterQuery' => ''
+		),
+		/*'FromStationDistance' => array(
 			'className' => 'StationDistance',
 			'foreignKey' => 'from_station_id',
 			'dependent' => true,
@@ -199,7 +212,7 @@ class Station extends AppModel {
 			'exclusive' => '',
 			'finderQuery' => '',
 			'counterQuery' => ''
-		),
+		),*/
 	);
 	
 	public $coords;

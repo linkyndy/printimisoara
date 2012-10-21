@@ -1009,9 +1009,12 @@ class Time extends AppModel {
 	 */
 	public function fetchStationLineTimes($stationLineId = null, $uncovered = true){
 		if (is_null($stationLineId)){
-			if ($uncovered === true){
-				$uncoveredLines = Configure::read('Maintenance.uncovered_lines');
-				
+			$uncoveredLines = Configure::read('Maintenance.uncovered_lines');
+			
+			if (
+				$uncovered === true &&
+				!empty($uncoveredLines)
+			){
 				$stationLineId = $this->Station->StationLine->field('id', array('line_id' => array_rand($uncoveredLines)), 'rand()');
 			} else {
 				$stationLineId = $this->Station->StationLine->field('id', array(), 'rand()');
@@ -1040,36 +1043,46 @@ class Time extends AppModel {
 		$this->Station->StationLine->recursive = 0;
 		
 		if (is_null($lineId)){
-			if ($uncovered === true){
-				$uncoveredLines = Configure::read('Maintenance.uncovered_lines');
-				
-				$stationLines = $this->Station->StationLine->find('all', array(
-					'conditions' => array('StationLine.line_id' => array_rand($uncoveredLines)),
-					'order' => 'StationLine.order ASC',
-				));
+			$uncoveredLines = Configure::read('Maintenance.uncovered_lines');
+			
+			if (
+				$uncovered === true &&
+				!empty($uncoveredLines)
+			){
+				$lineId = array_rand($uncoveredLines);
 			} else {
-				$stationLines = $this->Station->StationLine->find('all', array(
-					'conditions' => array('StationLine.line_id' => $this->Line->field('id', array(), 'rand()')),
-					'order' => 'StationLine.order ASC',
-				));
+				$lineId = $this->Line->field('id', array(), 'rand()');
 			}
-		} else {
-			$stationLines = $this->Station->StationLine->find('all', array(
-				'conditions' => array('StationLine.line_id' => $lineId),
-				'order' => 'StationLine.order ASC',
-			));
 		}
 		
-		if (!empty($stationLines)){
-			foreach ($stationLines as $stationLine) {
-				if ($this->fetchTimes($stationLine['StationLine']['id'])) {
-					$times = $this->saveTimes();
+		$stationLines = $this->Station->StationLine->find('all', array(
+			'conditions' => array('StationLine.line_id' => $lineId),
+			'order' => 'StationLine.order ASC',
+		));
+		
+		if (empty($stationLines)){
+			$this->_logStationLinesNotFound($lineId);
+			return false;
+		}
+		
+		$times = array();
+		foreach ($stationLines as $stationLine) {
+			if ($this->fetchTimes($stationLine['StationLine']['id'])) {
+				$time = $this->saveTimes();
 
-					if ($times === false){
-						return false;
-					}
+				if ($time === false){
+					// Message is logged from $this->saveTimes() method
+					return false;
 				}
+				
+				$times[] = $time;
 			}
+		}
+		
+		// Save distances between stations
+		if (!$this->Station->StationDistance->saveFromTimes($times)) {
+			$this->_logDistancesFail();
+			return false;
 		}
 		
 		return true;
@@ -1120,6 +1133,18 @@ class Time extends AppModel {
 	protected function _logOptimizeFail(){
 		$type = 'warning';
 		$message = 'Timpii nu au putut fi optimizati pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].' (<code>$stationLineId = '.$this->stationLine['StationLine']['id'].'</code>)';
+		$this->_logWrite($type, $message);
+	}
+	
+	protected function _logStationLinesNotFound($lineId){
+		$type = 'warning';
+		$message = 'Nu au putut fi returnate statiile pentru linia <code>$lineId = ' . $lineId . '</code> in vederea salvarii timpilor pentru linie.';
+		$this->_logWrite($type, $message);
+	}
+	
+	protected function _logDistancesFail(){
+		$type = 'warning';
+		$message = 'Distantele intre statii nu au putut fi salvate pentru linia ' . $this->stationLine['Line']['name'] . ' (<code>$lineId = ' . $this->stationLine['Line']['id'] . '</code>)';
 		$this->_logWrite($type, $message);
 	}
 	

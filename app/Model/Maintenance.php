@@ -26,7 +26,10 @@ class Maintenance extends AppModel {
 	public function getMaintenance(){
 		$maintenance = $this->find();
 		
-		$maintenance['Maintenance']['uncovered_lines'] = explode(',', $maintenance['Maintenance']['uncovered_lines']);
+		$maintenance['Maintenance']['uncovered_lines'] = 
+			(!empty($maintenance['Maintenance']['uncovered_lines'])) ? 
+				explode(',', $maintenance['Maintenance']['uncovered_lines']) : 
+				array();
 		
 		Configure::write('Maintenance', $maintenance['Maintenance']);
 	}

@@ -39,6 +39,12 @@ class StationDistance extends AppModel {
 				'message' => 'Tip de zi invalid!',
 			),
 		),
+		'occurances' => array(
+			'numeric' => array(
+				'rule' => array('numeric'),
+				'message' => 'Numar invalid!',
+			),
+		),
 		// Just a helper to display a more prettier form
 		'from' => array(
 			'notempty' => array(
@@ -70,4 +76,113 @@ class StationDistance extends AppModel {
 			'order' => ''
 		)
 	);
+	
+	/**
+	 * Saves station distances from an array of times
+	 * for a line
+	 *
+	 * @param $times
+	 *   Array of times as saved with $this->Times->saveTimes()
+	 *
+	 * @return bool
+	 *   Whether station distances have been saved or not
+	 */
+	public function saveFromTimes($times = array()){
+		if (empty($times)){
+			return false;
+		}
+		
+		// Make a circular array so that distance between all
+		// two consecutive stations are saved
+		$times[] = $times[0];
+		
+		foreach ($times as $i => $time) {
+			if (
+				empty($times[$i]) ||
+				empty($times[$i + 1]) ||
+				$i == count($times) - 1
+			) {
+				continue;
+			}
+			
+			// Cycle to all times between the two stations
+			foreach ($times[$i] as $fromTime) {
+				foreach ($times[$i + 1] as $toTime) {
+					// Check times only if they are of M type
+					if (
+						$fromTime['type'] != 'M' || 
+						$toTime['type'] != 'M'
+					){
+						continue;
+					}
+					
+					$minutes = $this->_minutesBetween($fromTime['time'], $toTime['time']);
+					
+					// Save only the distances whose times are for the same vehicle 
+					if (
+						$minutes === false ||
+						$minutes > Configure::read('Config.max_distance_in_minutes')
+					) {
+						continue;
+					}
+					
+					$stationDistance = array(
+						'from_station_id' => $fromTime['station_id'],
+						'to_station_id' => $toTime['station_id'],
+						'minutes' => $minutes,
+						'time' => date('H:i'),
+						'day' => $fromTime['day'],
+					);
+					if ($occurances = $this->_distanceOccurances($stationDistance)) {
+						$stationDistance['id'] = $occurances['StationDistance']['id'];
+						$stationDistance['occurances'] = $occurances['StationDistance']['occurances'] + 1;
+					}
+					
+					if (!$this->save(array('StationDistance' => $stationDistance))) {
+						return false;
+					}
+				}
+			}
+		}
+		
+		return true;
+	}
+	
+	/**
+	 * Computes difference in minutes between two
+	 * times in the H:i format
+	 *
+	 * If start time is greater then end time and end time
+	 * is near midnight, then compute the difference with
+	 * the day change
+	 */
+	protected function _minutesBetween($start, $end){
+		$start = strtotime($start);
+		
+		if ($start > strtotime($end)) {
+			if (date('G', strtotime($end)) == 0) {
+				$end = strtotime($end . '+1day');
+			} else {
+				return false;
+			}
+		} else {
+			$end = strtotime($end);
+		}
+		
+		return (int)date('i', ($end - $start));
+	}
+	
+	protected function _distanceOccurances($data = array()){
+		return $this->find('first', array(
+			'fields' => array('StationDistance.id', 'StationDistance.occurances'),
+			'conditions' => array(
+				'StationDistance.from_station_id' => $data['from_station_id'],
+				'StationDistance.to_station_id' => $data['to_station_id'],
+				'StationDistance.minutes' => $data['minutes'],
+				'StationDistance.time' => $data['time'],
+				'StationDistance.day' => $data['day'],
+			),
+			'contain' => false
+		));
+	}
 }

@@ -30,6 +30,12 @@ class Config extends AppModel {
 				'message' => 'Invalid day change time',
 			),
 		),
+		'max_distance_in_minutes' => array(
+			'numeric' => array(
+				'rule' => array('numeric'),
+				'message' => 'Invalid maximum distance in minutes between stations',
+			),
+		),
 	);
 	
 	public function getConfig(){

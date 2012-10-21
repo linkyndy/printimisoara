@@ -1,7 +1,7 @@
 <?php
 
 class TimeShell extends AppShell {
-	public $uses = array('Config', 'Time', 'Maintenance', 'StationLine');
+	public $uses = array('Config', 'Time');
 	
 	public function main(){
 		$this->Config->getConfig();
