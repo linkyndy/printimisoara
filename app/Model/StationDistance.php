@@ -158,7 +158,7 @@ class StationDistance extends AppModel {
 			}
 		}
 		
-		return $this->saveMany($stationDistances);
+		return (!empty($stationDistances)) ? $this->saveMany($stationDistances) : true;
 	}
 	
 	/**
