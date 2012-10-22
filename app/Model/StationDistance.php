@@ -96,6 +96,7 @@ class StationDistance extends AppModel {
 		// two consecutive stations are saved
 		$times[] = $times[0];
 		
+		$stationDistances = array();
 		foreach ($times as $i => $time) {
 			if (
 				empty($times[$i]) ||
@@ -133,19 +134,31 @@ class StationDistance extends AppModel {
 						'time' => date('H:i'),
 						'day' => $fromTime['day'],
 					);
-					if ($occurances = $this->_distanceOccurances($stationDistance)) {
+					
+					// Occurances among currently parsed times..
+					// ... occurances from database
+					if ($existing = array_search($stationDistance, $stationDistances) !== false) {
+						// If occurances set (from database occurances on first occurance parse)
+						if (isset($stationDistances[$existing]['occurances'])) {
+							$stationDistances[$existing]['occurances']++;
+						} else {
+							$stationDistances[$existing]['occurances'] = 2;
+						}
+						
+						// Don't add the distance to the array since it already exists there
+						continue;
+						
+					} elseif ($occurances = $this->_distanceOccurances($stationDistance)) {
 						$stationDistance['id'] = $occurances['StationDistance']['id'];
 						$stationDistance['occurances'] = $occurances['StationDistance']['occurances'] + 1;
 					}
 					
-					if (!$this->save(array('StationDistance' => $stationDistance))) {
-						return false;
-					}
+					$stationDistances[] = $stationDistance;
 				}
 			}
 		}
 		
-		return true;
+		return $this->saveMany($stationDistances);
 	}
 	
 	/**
