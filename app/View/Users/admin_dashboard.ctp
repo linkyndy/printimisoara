@@ -17,4 +17,16 @@
 			</div>
 		<?php endif; ?>
 	</div>
+	
+	<div class="span4">
+		<table class="table table-striped table-bordered">
+			<caption>Baza de date</caption>
+			<tbody>
+				<tr>
+					<td>Ultima actualizare</td>
+					<td><?php echo $this->Time->niceShort($database['last_updated']); ?></td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
 </div>

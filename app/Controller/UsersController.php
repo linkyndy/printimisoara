@@ -2,6 +2,8 @@
 App::uses('AppController', 'Controller');
 
 class UsersController extends AppController {
+	
+	public $uses = array('User', 'StationLine', 'Station', 'Line');
 		
 /**
  * Everyone
@@ -41,6 +43,22 @@ class UsersController extends AppController {
 			'is_close_to_vacation' => Configure::read('Config.is_close_to_vacation'),
 			'vacation_start' => Configure::read('Config.vacation_start'),
 			'vacation_end' => Configure::read('Config.vacation_end'),
+		));
+		
+		$stationLinesLastUpdated = $this->StationLine->field('modified', array(), 'modified DESC');
+		$stationsLastUpdated = $this->Station->field('modified', array(), 'modified DESC');
+		$linesLastUpdated = $this->Line->field('modified', array(), 'modified DESC');
+		if (strtotime($stationLinesLastUpdated) > strtotime($stationsLastUpdated)) {
+			if (strtotime($stationLinesLastUpdated) > strtotime($linesLastUpdated)) {
+				$lastUpdated = $stationLinesLastUpdated;
+			} else {
+				$lastUpdated = $linesLastUpdated;
+			}
+		} else {
+			$lastUpdated - $stationsLastUpdated;
+		}
+		$this->set('database', array(
+			'last_updated' => $lastUpdated
 		));
 	}
 	
