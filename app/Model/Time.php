@@ -706,23 +706,23 @@ class Time extends AppModel {
 	/**
 	 * Retrieves all times for a line
 	 *
-	 * @param $line_id
+	 * @param $lineId
 	 *   ID of the line
 	 *
 	 * @return array
 	 *   Array of times, grouped by direction,
 	 *   station, day, hour and minute
 	 */	
-	public function line($line_id = null){
-		$this->Line->id = $line_id;
+	public function line($lineId = null){
+		$this->Line->id = $lineId;
 		if(!$this->Line->exists()){
 			throw new NotFoundException(__('Linie invalida'));
 		}
 		
-		$directions = $this->Line->directions($line);
+		$directions = $this->Line->directions($lineId);
 		foreach($directions as &$direction){
 			foreach($direction as &$station){
-				$times = $this->find('all', array('conditions' => array('Time.station_id' => $station['Station']['id'], 'Time.line_id' => $line), 'order' => 'Time.time ASC'));
+				$times = $this->find('all', array('conditions' => array('Time.station_id' => $station['Station']['id'], 'Time.line_id' => $lineId), 'order' => 'Time.time ASC'));
 				$station['Time'] = $this->_groupByHoursAndDay($times);	
 			}
 		}
