@@ -37,7 +37,7 @@ function deleteStation($small){
 }
 
 function buildData(){
-	var $form = $("form#StationLineAdminViewForm");
+	var $form = $("form#StationLineAdminEditForm");
 	
 	$("ul#stations li").each(function(index){
 		$form.append('<input type="hidden" id="Station' + index + 'NameDirection" name="data[Station][' + index + '][name_direction]" value="' + $(this).find("span").text() + '">');
