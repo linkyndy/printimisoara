@@ -61,15 +61,23 @@ class FollowingStationLine extends AppModel {
 	);
 	
 	/**
-	 * Fetch the next station line after the given
+	 * Fetch the id of the next station line after the given
 	 *
 	 * @param $stationLineId
 	 *   Reference station line
 	 */
-	public function one($stationLineId){
-		return $this->find('first', array(
-			'conditions' => array('FollowingStationLine.reference_station_line_id' => $stationLineId),
-		));
+	public function oneAfter($stationLineId){
+		return $this->field('station_line_id', array('reference_station_line_id' => $stationLineId), 'order ASC');
+	}
+	
+	/**
+	 * Fetch the id of the station line before the given
+	 *
+	 * @param $stationLineId
+	 *   Reference station line
+	 */
+	public function oneBefore($stationLineId){
+		return $this->field('reference_station_line_id', array('station_line_id' => $stationLineId, 'order' => 1));
 	}
 	
 	public function compute($lineIds = array()){

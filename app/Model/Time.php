@@ -94,13 +94,18 @@ class Time extends AppModel {
 	protected $_times = array();
 	
 	/**
+	 * Recursively fetched times
+	 */
+	protected $_recursiveTimes = array();
+	
+	/**
 	 * Methods in which times arrays can be parsed
 	 */
 	protected $_methods = array(
 		'fetch',
 		'station_line_batch',
-		'line_follow',
-		'station_group_follow',
+		//'line_follow',
+		//'station_group_follow',
 		'gps'
 	);
 	
@@ -413,8 +418,12 @@ class Time extends AppModel {
 	 * Get time for a specific station line,
 	 * optionally filtered by time and day
 	 *
+	 * Database time needs to be computed after the
+	 * follow-up time because new times are fetched
+	 * during the follow-up
+	 *
 	 * @param $options
-	 *   Options array, can contain thw following:
+	 *   Options array, can contain the following:
 	 *   - $time around which to return the time
 	 *   - $day of the time
 	 */
@@ -429,9 +438,66 @@ class Time extends AppModel {
 		);
 		$options += $defaults;
 		
+		$fetchTime = $followUp = $database = array('time' => null, 'weight' => 0);
+		
+		// Fetch times recursively if this is possible
 		if ($this->_canFetchRecursive($options)) {
-			$this->_fetchRecursive($stationLineId, $options['time']);
+			// Save fetch time
+			$fetchTime = array(
+				'time' => $this->_times[0]['time'],
+				'weight' => 
+					($this->_times[0]['type'] == 'M') ?
+						10 :
+						0.66
+				, 
+			);
+			
+			$this->_fetchRecursive($this->_previousStationLineId($stationLineId), $options['time']);
+			
+			if (!empty($this->_recursiveTimes)) {
+				// Save distances between stations
+				if (!$this->Station->StationDistance->saveFromTimes($this->_recursiveTimes)) {
+					$this->_logDistancesFail();
+					return false;
+				}
+
+				// Distance between last follow-up station and the current station
+				$followUpMinutes = $this->Station->StationDistance->minutesBetween($this->stationLine['Station']['id'], $this->_recursiveTimes[count($this->_recursiveTimes) - 1]['station_id'], $options);
+
+				// Time after applying the follow-up time to the last follow-up station
+				if ($followUpMinutes !== false) {
+					$followUp = array(
+						'time' => date('H:i', strtotime($this->_recursiveTimes[count($this->_recursiveTimes) - 1]['time'] . '+' . $followUpMinutes . 'minutes')),
+						'weight' => 
+							($this->_times[0]['type'] == 'M') ?
+							(5 - pow(2, count($this->_recursiveTimes)) / 80) :
+							(1.33 - pow(2, count($this->_recursiveTimes)) / 80)
+						,
+					);
+				}
+			}
 		}
+		
+		// Get database time
+		$databaseTime = $this->_getDatabase($stationLineId, $options);
+		if ($databaseTime !== false) {
+			$database = array(
+				'time' => $databaseTime,
+				'weight' => 1,
+			);
+		}
+		
+		// Map minutes to indexes to ease 
+		// finding the optimized time
+		$fetchTime['index'] = (!is_null($fetchTime['time'])) ? (strtotime($fetchTime['time']) - strtotime('midnight')) / 60 : 0;
+		$followUp['index'] = (!is_null($followUp['time'])) ? (strtotime($followUp['time']) - strtotime('midnight')) / 60 : 0;
+		$database['index'] = (!is_null($database['time'])) ? (strtotime($database['time']) - strtotime('midnight')) / 60 : 0;
+		
+		// Compute final time
+		$index = ($fetchTime['index'] * $fetchTime['weight'] + $followUp['index'] * $followUp['weight'] + $database['index'] * $database['weight']) / ($fetchTime['weight'] + $followUp['weight'] + $database['weight']);
+		$time = date('H:i', strtotime('midnight +' . $index . 'minutes'));
+		
+		return $time;
 	}
 	
 	/**
@@ -453,18 +519,50 @@ class Time extends AppModel {
 		$stationLineId = $this->stationLine['StationLine']['id'];
 		
 		if ($this->fetchTimes($stationLineId)) {
-			$this->saveTimes();
+			$times = $this->saveTimes();
 			
-			if (!empty($this->_times)) {
-				$mTypes = Hash::extract($this->_times, '{n}[type=M]');
+			if (!empty($times)) {
+				$mTypes = Hash::extract($times, '{n}[type=M]');
 				if (!empty($mTypes)) {
 					$mTypesSorted = Hash::sort($mTypes, '{n}.time', 'asc');
 					$time = strtotime($mTypesSorted[0]['time']);
 					
-					return $time; 
-					if ($time > $refTime) {
-						$nextStationLineId = $this->Station->StationLine->FollowingStationLine->one($stationLineId);
-						$this->_fetchRecursive($nextStationLineId, $time);
+					return $time > $options['time'];
+				}
+			}
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Check whether times can be fetched recursively
+	 *
+	 * Basically, times can be fetched recursively if
+	 * there is at least one M-type time which is later
+	 * than the desired time.
+	 *
+	 * @param $options
+	 *   Array of options passed from $this->getTime()
+	 *
+	 * @return bool
+	 *   Whether times can be fetched recursively or not
+	 *
+	 * @see $this->getTime()
+	 */
+	protected function _fetchRecursive($stationLineId, $refTime){
+		if ($this->fetchTimes($stationLineId)) {
+			$times = $this->saveTimes();
+			
+			if (!empty($times)) {
+				$mTypes = Hash::extract($times, '{n}[type=M]');
+				if (!empty($mTypes)) {
+					$mTypesSorted = Hash::sort($mTypes, '{n}.time', 'asc');
+					$time = strtotime($mTypesSorted[0]['time']);
+					
+					if ($time < $refTime) {
+						$this->_recursiveTimes[] = $mTypesSorted[0];
+						$this->_fetchRecursive($this->_previousStationLineId($stationLineId), $time);
 					}
 				}
 			}
@@ -480,44 +578,17 @@ class Time extends AppModel {
 	 * and filtered to some algorithms before
 	 * it is returned.
 	 *
-	 * $options array can contain:
-	 * - $time around which to return the time
-	 * - $day of the time
+	 * No check on params is made because method is called
+	 * from $this->getTime() where all params are defined
+	 * and checked.
 	 */
-	public function getOptimizedTime($stationLineId = null, $options = array()){
-		if (!$this->stationLine = $this->Line->StationLine->find('first', array(
-			'conditions' => array('StationLine.id' => $stationLineId)
-		))){
+	protected function _getDatabase($stationLineId, $options){
+		if (!$this->_loadStationLine($stationLineId)) {
 			return false;
 		}
 		
-		$defaults = array(
-			'time' => time(),
-			'day' => $this->_dayType(time()),
-		);
-		$options += $defaults;
-		
-		if (!$this->getTime($stationLineId)) {
-			$this->_logRattNotFetched();
-			return false;
-		}
-		
-		$this->_fetchDbTimes($options);
-		
-		if (!$this->_optimizeTimes()) {
-			$this->_logOptimizeFail();
-			return false;
-		}
-		
-		return true;
-	}
-	
-	protected function _fetchDbTimes($options){
 		$this->recursive = -1;
-		
-		// Just-fetched times from RATT are
-		// already saved in the database
-		$this->_time = array();
+		$times = array();
 		
 		// Fetch first G or T type time which is 
 		// greater or equal than requested time.
@@ -539,11 +610,14 @@ class Time extends AppModel {
 				'order' => 'Time.time ASC',
 			));
 		} while(
-			empty($first) &&
+			$first === false &&
 			$midnight === false &&
 			$midnight = true
 		);
-		$this->_time[] = $first['Time'];
+		if (empty($first['Time'])) {
+			return false;
+		}
+		$times[] = $first['Time'];
 		
 		// Fetch M or U type times which are within
 		// a specific minute-radius from the time above
@@ -570,14 +644,15 @@ class Time extends AppModel {
 					'Time.day' => $options['day'],
 					'Time.type' => array('M', 'U'),
 				),
+				'order' => 'Time.time ASC'
 			));
 		} while(
 			empty($sooner) &&
 			$midnight === false &&
 			$midnight = true
 		);
-		foreach ($sooner as $time) {
-			$this->_time[] = $time['Time'];
+		if (!empty($sooner)) {
+			$times = array_merge($times, Hash::extract($sooner, '{n}.Time'));
 		}
 		
 		$midnight = false;
@@ -599,36 +674,37 @@ class Time extends AppModel {
 					'Time.day' => $options['day'],
 					'Time.type' => array('M', 'U'),
 				),
+				'order' => 'Time.time ASC',
 			));
 		} while(
 			empty($later) &&
 			$midnight === false &&
 			$midnight = true
 		);
-		foreach ($later as $time) {
-			$this->_time[] = $time['Time'];
+		if (!empty($later)) {
+			$times = array_merge($times, Hash::extract($later, '{n}.Time'));
 		}
-	}
-	
-	protected function _optimizeTimes(){
-		$this->_time = Hash::sort($this->_time, '{n}.time', 'asc');
+		
+		// Sort fetched times by time
+		$times = Hash::sort($times, '{n}.time', 'asc');
 		
 		// Map minutes to indexes to ease 
 		// finding the optimized time
-		foreach ($this->_time as $i => &$time) {
-			($i == 0) ?
-				$time['index'] = 0 :
-				$time['index'] = $this->_time[$i - 1]['index'] + (int)date('i', strtotime($time['time']) - strtotime($this->_time[$i - 1]['time']));
+		$times[0]['index'] = 0;
+		foreach ($times as $i => &$time) {
+			if ($i > 0) {
+				$time['index'] = $times[$i - 1]['index'] + (strtotime($time['time']) - strtotime($times[$i - 1]['time'])) / 60;
+			}
 		}
 		unset($time);
 		
+		// Set type and occurances weights for computing the database time
 		$type_weights = array(
 			'G' => 0.7,
 			'M' => 0.9,
 			'U' => 0.5,
 			'T' => 0.65,
 		);
-		
 		$occurance_weights = array(
 			'G' => 0.1,
 			'M' => 0.75,
@@ -636,30 +712,25 @@ class Time extends AppModel {
 			'T' => 0.05,
 		);
 		
-		$optimized_index = array('sum' => 0, 'weights' => 0);
-		foreach ($this->_time as $time) {
-			$optimized_index['sum'] += 
+		// Compute the database time
+		$sum = $weights = 0;
+		foreach ($times as $i => $time) {
+			$sum += 
 				$time['index'] * 
 				$type_weights[$time['type']] * 
 				$time['occurances'] * 
 				$occurance_weights[$time['type']]
 			;
-			$optimized_index['weights'] += 
+			$weights += 
 				$type_weights[$time['type']] * 
 				$time['occurances'] * 
 				$occurance_weights[$time['type']]
 			;
 		}
-		$optimized_index = round($optimized_index['sum'] / $optimized_index['weights']);
-		
-		foreach ($this->_time as $time) {
-			if ($time['index'] == $optimized_index) {
-				$this->optimizedTime = $time;
-				return true;
-			}
-		}
-		
-		return false;
+	
+		// Add the offset minutes (index) to the first time (base index)
+		// and return the resulted time
+		return date('H:i', strtotime($times[0]['time'] . '+' . round($sum / $weights) . 'minutes'));
 	}
 	
 	/**
@@ -760,7 +831,7 @@ class Time extends AppModel {
 	 * good, average and poor).
 	 */
 	public function coverage(){
-		$this->recursive = 0;
+		$this->recursive = -1;
 		
 		$lines = $this->Line->find('all', array(
 			'fields' => array('Line.id', 'Line.name', 'Line.colour'), 
@@ -966,6 +1037,10 @@ class Time extends AppModel {
 		} else{
 			return 'D';	
 		}
+	}
+	
+	protected function _previousStationLineId($stationLineId){
+		return $this->Station->StationLine->FollowingStationLine->oneBefore($stationLineId);
 	}
 	
 	/**

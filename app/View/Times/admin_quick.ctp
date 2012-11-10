@@ -25,8 +25,8 @@
 					<td class="span3">Timpii de la RATT</td>
 					<td>
 						<?php if (!empty($times)): ?>
-							<?php foreach ($times as $time): ?>
-								<span class="label label-<?php echo h($time['type']); ?>"><?php echo $this->Time->format('H:i', strtotime(h($time['time']))); ?></span>
+							<?php foreach ($times as $timee): ?>
+								<span class="label label-<?php echo h($timee['type']); ?>"><?php echo $this->Time->format('H:i', strtotime(h($timee['time']))); ?></span>
 							<?php endforeach; ?>
 						<?php endif; ?>
 					</td>
@@ -34,8 +34,8 @@
 				<tr>
 					<td>Timpul optimizat</td>
 					<td>
-						<?php if (!empty($optimizedTime)): ?>
-							<span class="label label-<?php echo h($optimizedTime['type']); ?>"><?php echo $this->Time->format('H:i', strtotime(h($optimizedTime['time']))); ?></span>
+						<?php if (!empty($time)): ?>
+							<span class="label"><?php echo $this->Time->format('H:i', strtotime($time)); ?></span>
 						<?php endif; ?>
 					</td>
 				</tr>

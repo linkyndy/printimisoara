@@ -45,6 +45,10 @@ class TimesController extends AppController {
 						$this->set('times', $times);
 					}
 				}
+				$time = $this->Time->getTime($station_line_id);
+				if ($time !== false) {
+					$this->set('time', $time);
+				}
 			}
 		}
 		
