@@ -5,9 +5,7 @@
 	<div class="page-header">
 		<h1>
 			Linia 
-			<span class="label<?php echo (isset($line['Line']['colour'])) ? ' label-line' . $line['Line']['colour'] : null; ?>">
-				<?php echo h($line['Line']['name']); ?>
-			</span>
+			<?php echo $this->Html->line($line['Line']['name'], $line['Line']['colour'], $line['Line']['id']); ?>
 		</h1>
 	</div>
 </div>

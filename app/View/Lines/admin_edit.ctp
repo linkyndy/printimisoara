@@ -5,7 +5,7 @@
 	<div class="page-header">
 		<h1>
 			Linia 
-			<?php echo $this->Html->line($this->Form->value('Line.name'), $this->Form->value('Line.colour'), $this->Form->value('Line.colour')); ?>
+			<?php echo $this->Html->line($this->Form->value('Line.name'), $this->Form->value('Line.colour'), $this->Form->value('Line.id')); ?>
 		</h1>
 	</div>
 </div>
