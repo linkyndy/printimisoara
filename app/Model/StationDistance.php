@@ -89,7 +89,7 @@ class StationDistance extends AppModel {
 	 */
 	public function saveFromTimes($times = array()){
 		if (empty($times)){
-			return false;
+			return true;
 		}
 		
 		// Make a circular array so that distance between all
@@ -159,6 +159,43 @@ class StationDistance extends AppModel {
 		}
 		
 		return (!empty($stationDistances)) ? $this->saveMany($stationDistances) : true;
+	}
+	
+	/**
+	 * Retrieves the distance in minutes between 
+	 * two stations
+	 * 
+	 * No check on params is made because method is called
+	 * from $this->Time->getTime() where all params are defined
+	 * and checked.
+	 *
+	 * Distance in minutes represents the weighted average of the
+	 * distances in minutes and their occurances
+	 */
+	public function minutesBetween($fromStationId, $toStationId, $options = array()){
+		$this->recursive = -1;
+		
+		$distances = $this->find('all', array(
+			'conditions' => array(
+				'from_station_id' => $fromStationId, 
+				'to_station_id' => $toStationId, 
+				'time >=' => date('H:i', strtotime($options['time'] . '-' . Configure::read('Config.distance_range') . 'minutes')),
+				'time <=' => date('H:i', strtotime($options['time'] . '+' . Configure::read('Config.distance_range') . 'minutes')),
+				'day' => $options['day'],
+			),
+		));
+		
+		if (empty($distances)) {
+			return false;
+		}
+		
+		$sum = $weights = 0;
+		foreach ($distances as $distance) {
+			$sum += $distance['StationDistance']['minutes'] * $distance['StationDistance']['occurances'];
+			$weights += $distance['StationDistance']['occurances'];
+		}
+		
+		return round($sum / $weights);
 	}
 	
 	/**
