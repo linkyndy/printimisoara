@@ -122,6 +122,19 @@ class Station extends AppModel {
 			'finderQuery' => '',
 			'counterQuery' => ''
 		),
+		'ComputedTime' => array(
+			'className' => 'ComputedTime',
+			'foreignKey' => 'station_id',
+			'dependent' => true,
+			'conditions' => '',
+			'fields' => '',
+			'order' => '',
+			'limit' => '',
+			'offset' => '',
+			'exclusive' => '',
+			'finderQuery' => '',
+			'counterQuery' => ''
+		),
 		'FromStationConnection' => array(
 			'className' => 'StationConnection',
 			'foreignKey' => 'from_station_id',

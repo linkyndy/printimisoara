@@ -118,6 +118,19 @@ class Line extends AppModel {
 			'finderQuery' => '',
 			'counterQuery' => ''
 		),
+		'ComputedTime' => array(
+			'className' => 'ComputedTime',
+			'foreignKey' => 'line_id',
+			'dependent' => true,
+			'conditions' => '',
+			'fields' => '',
+			'order' => '',
+			'limit' => '',
+			'offset' => '',
+			'exclusive' => '',
+			'finderQuery' => '',
+			'counterQuery' => ''
+		),
 		'StationLine' => array(
 			'className' => 'StationLine',
 			'foreignKey' => 'line_id',
