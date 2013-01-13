@@ -115,6 +115,42 @@ class Time extends AppModel {
 	 */
 	protected $_fetchRecursiveFirstIteration = true;
 	
+	/**
+	 * Array holding all retrieved times, the final time, its weight 
+	 * for each method of computing times and its index (minute mapping
+	 * for easier finding of the optimized time), as retrieved by 
+	 * $this->getTime().
+	 * Declared here so that it can also be used by ComputedTime model
+	 * for generating how the final time was computed.
+	 */
+	public $time = array(
+		'fetch' => array(
+			'times' => array(),
+			'time' => null,
+			'weight' => 0,
+			'index' => 0,
+		),
+		/*'followUp' => array(
+			'times' => array(),
+			'time' => null,
+			'weight' => 0,
+			'index' => 0,
+		),*/
+		'database' => array(
+			'times' => array(),
+			'time' => null,
+			'weight' => 0,
+			'index' => 0,
+		),
+	);
+	
+	/* Holds the final computed time, as retrieved by 
+	 * $this->getTime().
+	 * Declared here so that it can also be used by ComputedTime model
+	 * for generating how the final time was computed.
+	 */
+	public $finalTime = null;
+	
 	/*
 	 * Fetch times for a specific station line
 	 *
@@ -438,66 +474,109 @@ class Time extends AppModel {
 		);
 		$options += $defaults;
 		
-		$fetchTime = $followUp = $database = array('time' => null, 'weight' => 0);
-		
-		// Fetch times recursively if this is possible
-		if ($this->_canFetchRecursive($options)) {
-			// Save fetch time
-			$fetchTime = array(
-				'time' => $this->_times[0]['time'],
-				'weight' => 
-					($this->_times[0]['type'] == 'M') ?
-						10 :
-						0.66
-				, 
-			);
+		// Fetch times
+		if ($this->fetchTimes($stationLineId)) {
+			$this->time['fetch']['times'] = $this->saveTimes();
 			
-			$this->_fetchRecursive($this->_previousStationLineId($stationLineId), $options['time']);
+			if (!empty($this->time['fetch']['times'])) {
+				// Save fetch time
+				$this->time['fetch']['time'] = $this->time['fetch']['times'][0]['time'];
+				$this->time['fetch']['weight'] = ($this->time['fetch']['times'][0]['type'] == 'M') ? 10 : 0.66;
+			}
 			
-			if (!empty($this->_recursiveTimes)) {
-				// Save distances between stations
-				if (!$this->Station->StationDistance->saveFromTimes($this->_recursiveTimes)) {
-					$this->_logDistancesFail();
-					return false;
-				}
+			/* @TODO: implement followUp
+			// Fetch times recursively if this is possible
+			if ($this->_canFetchRecursive($fetchedTimes, $options)) {
+				$this->_fetchRecursive($this->_previousStationLineId($stationLineId), strtotime($fetch['time']));
 
-				// Distance between last follow-up station and the current station
-				$followUpMinutes = $this->Station->StationDistance->minutesBetween($this->stationLine['Station']['id'], $this->_recursiveTimes[count($this->_recursiveTimes) - 1]['station_id'], $options);
+				if (!empty($this->_recursiveTimes)) {
+					$reversedRecursiveTimes = array_reverse($this->_recursiveTimes);
+					
+					// Save detailed time info
+					$this->Station->ComputedTime->followUpTimes = $this->_recursiveTimes;
 
-				// Time after applying the follow-up time to the last follow-up station
-				if ($followUpMinutes !== false) {
-					$followUp = array(
-						'time' => date('H:i', strtotime($this->_recursiveTimes[count($this->_recursiveTimes) - 1]['time'] . '+' . $followUpMinutes . 'minutes')),
-						'weight' => 
-							($this->_times[0]['type'] == 'M') ?
-							(5 - pow(2, count($this->_recursiveTimes)) / 80) :
-							(1.33 - pow(2, count($this->_recursiveTimes)) / 80)
-						,
-					);
+					// Save distances between stations
+					if (!$this->Station->StationDistance->saveFromTimes($reversedRecursiveTimes)) {
+						$this->_logDistancesFail();
+						return false;
+					}
+					
+					// Distance between last follow-up station and the current station
+					// [0] because there is only one time saved for each station (M-type time)
+					// in $this->_recursive from those fetched with $this->_fetchRecursive()
+					// TODO ADU MINUTELE RECURSIV, A->B->C, DISTANTA A->C NU SE POATE LUA DIRECT
+					$followUpMinutes = 0;
+					foreach ($reversedRecursiveTimes as $i => $recursiveTime) {
+						if ($i == count($reversedRecursiveTimes) - 1) {
+							// If last station in array, compute the distance with
+							// the actual station...
+							$followUpMinutes += $this->Station->StationDistance->minutesBetween($recursiveTime[0]['station_id'], $this->stationLine['Station']['id'], $options);
+						} else {
+							// ...else, compute the distance between the current and
+							// the next station
+							$followUpMinutes += $this->Station->StationDistance->minutesBetween($recursiveTime[0]['station_id'], $reversedRecursiveTimes[$i + 1][0]['station_id'], $options);
+						}
+						debug($followUpMinutes);
+					}
+					debug($followUpMinutes);exit;
+					// Time after applying the follow-up time to the last follow-up station
+					if ($followUpMinutes !== false) {
+						$followUp = array(
+							'time' => date('H:i', strtotime($this->_recursiveTimes[count($this->_recursiveTimes) - 1][0]['time'] . '+' . $followUpMinutes . 'minutes')),
+							'weight' => 
+								($fetchedTimes[0]['type'] == 'M') ?
+									(5 - pow(2, count($this->_recursiveTimes)) / 80) :
+									(1.33 - pow(2, count($this->_recursiveTimes)) / 80)
+							,
+						);
+
+						// Save detailed time info
+						$this->Station->ComputedTime->followUp = $followUp;
+					}
 				}
 			}
+			*/
 		}
 		
 		// Get database time
-		$databaseTime = $this->_getDatabase($stationLineId, $options);
-		if ($databaseTime !== false) {
-			$database = array(
-				'time' => $databaseTime,
-				'weight' => 1,
-			);
+		$database = $this->_getDatabase($stationLineId, $options);
+		
+		if ($database !== false) {
+			$this->time['database']['times'] = $database['times'];
+			$this->time['database']['time'] = $database['time'];
+			$this->time['database']['weight'] = 1;
 		}
 		
 		// Map minutes to indexes to ease 
 		// finding the optimized time
-		$fetchTime['index'] = (!is_null($fetchTime['time'])) ? (strtotime($fetchTime['time']) - strtotime('midnight')) / 60 : 0;
-		$followUp['index'] = (!is_null($followUp['time'])) ? (strtotime($followUp['time']) - strtotime('midnight')) / 60 : 0;
-		$database['index'] = (!is_null($database['time'])) ? (strtotime($database['time']) - strtotime('midnight')) / 60 : 0;
+		foreach ($this->time as $method => $data) {
+			if (!is_null($data['time']))  {
+				$this->time[$method]['index'] = (strtotime($data['time']) - strtotime('midnight')) / 60;
+			}
+		}
+		
+		// Check whether there is time data to be displayed
+		if (array_sum(Hash::extract($this->time, '{s}.index')) == 0) {
+			$this->_logNoTimeData();
+			return false;
+		}
 		
 		// Compute final time
-		$index = ($fetchTime['index'] * $fetchTime['weight'] + $followUp['index'] * $followUp['weight'] + $database['index'] * $database['weight']) / ($fetchTime['weight'] + $followUp['weight'] + $database['weight']);
-		$time = date('H:i', strtotime('midnight +' . $index . 'minutes'));
+		$sum = $weights = 0;
+		foreach ($this->time as $data) {
+			$sum += $data['index'] * $data['weight'];
+			$weights += $data['weight'];
+		}
+		$this->finalTime = date('H:i', strtotime('midnight +' . round($sum / $weights) . 'minutes'));
 		
-		return $time;
+		// Save detailed time
+		if ($this->Station->ComputedTime->saveTime()) {
+			$this->_logDetailedTime();
+		} else{
+			$this->_logDetailedTimeFail();
+		}
+		
+		return $this->finalTime;
 	}
 	
 	/**
@@ -507,6 +586,8 @@ class Time extends AppModel {
 	 * there is at least one M-type time which is later
 	 * than the desired time.
 	 *
+	 * @param $times
+	 *   Times previously fetched with $this->fetchTimes()
 	 * @param $options
 	 *   Array of options passed from $this->getTime()
 	 *
@@ -515,20 +596,14 @@ class Time extends AppModel {
 	 *
 	 * @see $this->getTime()
 	 */
-	protected function _canFetchRecursive($options){
-		$stationLineId = $this->stationLine['StationLine']['id'];
-		
-		if ($this->fetchTimes($stationLineId)) {
-			$times = $this->saveTimes();
-			
-			if (!empty($times)) {
-				$mTypes = Hash::extract($times, '{n}[type=M]');
-				if (!empty($mTypes)) {
-					$mTypesSorted = Hash::sort($mTypes, '{n}.time', 'asc');
-					$time = strtotime($mTypesSorted[0]['time']);
-					
-					return $time > $options['time'];
-				}
+	protected function _canFetchRecursive($times, $options){
+		if (!empty($times)) {
+			$mTypes = Hash::extract($times, '{n}[type=M]');
+			if (!empty($mTypes)) {
+				$mTypesSorted = Hash::sort($mTypes, '{n}.time', 'asc');
+				$time = strtotime($mTypesSorted[0]['time']);
+				
+				return $time > $options['time'];
 			}
 		}
 		
@@ -559,9 +634,8 @@ class Time extends AppModel {
 				if (!empty($mTypes)) {
 					$mTypesSorted = Hash::sort($mTypes, '{n}.time', 'asc');
 					$time = strtotime($mTypesSorted[0]['time']);
-					
 					if ($time < $refTime) {
-						$this->_recursiveTimes[] = $mTypesSorted[0];
+						$this->_recursiveTimes[][] = $mTypesSorted[0];
 						$this->_fetchRecursive($this->_previousStationLineId($stationLineId), $time);
 					}
 				}
@@ -581,6 +655,9 @@ class Time extends AppModel {
 	 * No check on params is made because method is called
 	 * from $this->getTime() where all params are defined
 	 * and checked.
+	 *
+	 * Return both the optimized time and all the times used
+	 * in the algorithm. 
 	 */
 	protected function _getDatabase($stationLineId, $options){
 		if (!$this->_loadStationLine($stationLineId)) {
@@ -730,7 +807,9 @@ class Time extends AppModel {
 	
 		// Add the offset minutes (index) to the first time (base index)
 		// and return the resulted time
-		return date('H:i', strtotime($times[0]['time'] . '+' . round($sum / $weights) . 'minutes'));
+		$time = date('H:i', strtotime($times[0]['time'] . '+' . round($sum / $weights) . 'minutes'));
+		
+		return compact('time', 'times');
 	}
 	
 	/**
@@ -1205,12 +1284,6 @@ class Time extends AppModel {
 		$this->_logWrite($type, $message);
 	}
 	
-	protected function _logOptimizeFail(){
-		$type = 'warning';
-		$message = 'Timpii nu au putut fi optimizati pentru statia '.$this->stationLine['Station']['name_direction'].', linia '.$this->stationLine['Line']['name'].' (<code>$stationLineId = '.$this->stationLine['StationLine']['id'].'</code>)';
-		$this->_logWrite($type, $message);
-	}
-	
 	protected function _logStationLinesNotFound($lineId){
 		$type = 'warning';
 		$message = 'Nu au putut fi returnate statiile pentru linia <code>$lineId = ' . $lineId . '</code> in vederea salvarii timpilor pentru linie.';
@@ -1220,6 +1293,24 @@ class Time extends AppModel {
 	protected function _logDistancesFail(){
 		$type = 'warning';
 		$message = 'Distantele intre statii nu au putut fi salvate pentru linia ' . $this->stationLine['Line']['name'] . ' (<code>$lineId = ' . $this->stationLine['Line']['id'] . '</code>)';
+		$this->_logWrite($type, $message);
+	}
+	
+	protected function _logTimeNoData(){
+		$type = 'warning';
+		$message = 'Nu exista niciun timp disponibil pentru a calcula timpul pentru statia ' . $this->stationLine['Station']['name_direction'] . ', linia ' . $this->stationLine['Line']['name'] . '.';
+		$this->_logWrite($type, $message);
+	}
+	
+	protected function _logDetailedTime(){
+		$type = 'detailed-time';
+		$message = 'Timpul detaliat a fost salvat pentru statia ' . $this->stationLine['Station']['name_direction'] . ', linia ' . $this->stationLine['Line']['name'] . '.';
+		$this->_logWrite($type, $message);
+	}
+	
+	protected function _logDetailedTimeFail(){
+		$type = 'warning';
+		$message = 'Timpul detaliat nu a putut fi salvat pentru statia ' . $this->stationLine['Station']['name_description'] . ', linia ' . $this->stationLine['Line']['name'] . '.';
 		$this->_logWrite($type, $message);
 	}
 	

@@ -15,4 +15,5 @@
 	<li<?php echo ($active == 'stations') ? ' class="active"' : null; ?>><?php echo $this->Html->link('Staţii', array('controller' => 'times', 'action' => 'stations'), array('escape' => false)); ?></li>
 	<li<?php echo ($active == 'lines') ? ' class="active"' : null; ?>><?php echo $this->Html->link('Linii', array('controller' => 'times', 'action' => 'lines'), array('escape' => false)); ?></li>
 	<li<?php echo ($active == 'coverage') ? ' class="active"' : null; ?>><?php echo $this->Html->link('Acoperire', array('controller' => 'times', 'action' => 'coverage'), array('escape' => false)); ?></li>
+	<li><?php echo $this->Html->link('Timpi detaliati', array('controller' => 'computed_times', 'action' => 'index'), array('escape' => false)); ?></li>
 </ul>

@@ -1,4 +1,4 @@
-<?php $labels = array('error' => 'label-important', 'warning' => 'label-warning', 'notice' => 'label-info', 'info' => '', 'debug' => '', 'time-info' => 'label-time-info', 'cron' => 'label-cron', 'hijack' => 'label-hijack'); ?>
+<?php $labels = array('error' => 'label-important', 'warning' => 'label-warning', 'notice' => 'label-info', 'info' => '', 'debug' => '', 'time-info' => 'label-time-info', 'detailed-time' => 'label-detailed-time', 'cron' => 'label-cron', 'hijack' => 'label-hijack'); ?>
 
 <div class="row-fluid">
 	<div class="page-header">

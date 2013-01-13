@@ -3,7 +3,7 @@ App::uses('AppController', 'Controller');
 
 class TimesController extends AppController {
 	
-	public $uses = array('Time', 'Station', 'Line', 'StationLine');
+	public $uses = array('Time', 'ComputedTime', 'Station', 'Line', 'StationLine');
 	
 	public $paginate = array(
 		'order' => array(
@@ -36,18 +36,19 @@ class TimesController extends AppController {
 	 */
 	public function admin_quick(){
 		if ($this->request->is('post')) {
-			$station_line_id = $this->StationLine->idFromStationLineName($this->request->data['Time']['station_line']);
+			$stationLineId = $this->StationLine->idFromStationLineName($this->request->data['Time']['station_line']);
 
-			if ($station_line_id) {
-				if ($this->Time->fetchTimes($station_line_id)) {
-					$times = $this->Time->saveTimes();
-					if ($times !== false) {
-						$this->set('times', $times);
-					}
-				}
-				$time = $this->Time->getTime($station_line_id);
+			if ($stationLineId) {
+				$time = $this->Time->getTime($stationLineId);
 				if ($time !== false) {
 					$this->set('time', $time);
+					$this->set('detailedTime', $this->ComputedTime->find('first', array(
+						'conditions' => array(
+							'ComputedTime.station_id' => $this->StationLine->field('station_id', array('StationLine.id' => $stationLineId)),
+							'ComputedTime.line_id' => $this->StationLine->field('line_id', array('StationLine.id' => $stationLineId)),
+							'ComputedTime.time' => $time,
+						)
+					)));
 				}
 			}
 		}

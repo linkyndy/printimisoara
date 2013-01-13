@@ -19,37 +19,34 @@
 	</div>
 	
 	<div class="span6">
-		<?php if (isset($times) || isset($optimizedTime)): ?>
-			<table class="table table-striped table-bordered">
+		<table class="table table-striped table-bordered">
+			<?php if (isset($time)): ?>
 				<tr>
-					<td class="span3">Timpii de la RATT</td>
+					<td>Timpul</td>
 					<td>
-						<?php if (!empty($times)): ?>
-							<?php foreach ($times as $timee): ?>
-								<span class="label label-<?php echo h($timee['type']); ?>"><?php echo $this->Time->format('H:i', strtotime(h($timee['time']))); ?></span>
-							<?php endforeach; ?>
-						<?php endif; ?>
+						<span class="label"><?php echo $this->Time->format('H:i', strtotime($time)); ?></span>
 					</td>
 				</tr>
 				<tr>
-					<td>Timpul optimizat</td>
+					<td>Timp detaliat</td>
 					<td>
-						<?php if (!empty($time)): ?>
-							<span class="label"><?php echo $this->Time->format('H:i', strtotime($time)); ?></span>
+						<?php if (!empty($detailedTime)): ?>
+							<?php echo $detailedTime['ComputedTime']['log']; ?>
 						<?php endif; ?>
 					</td>
 				</tr>
-			</table>
-			
-			<p>
-				<small class="muted">
-					<span>Legenda: </span>
-					<span class="label label-M">in minute</span> &bull;
-					<span class="label label-G">din grafic</span> &bull;
-					<span class="label label-T">din tabelă</span> &bull;
-					<span class="label label-U">de la utilizator</span>
-				</small>
-			</p>
-		<?php endif;?>
+				
+			<?php endif;?>
+		</table>
+		
+		<p>
+			<small class="muted">
+				<span>Legenda: </span>
+				<span class="label label-M">in minute</span> &bull;
+				<span class="label label-G">din grafic</span> &bull;
+				<span class="label label-T">din tabelă</span> &bull;
+				<span class="label label-U">de la utilizator</span>
+			</small>
+		</p>
 	</div>
 </div>

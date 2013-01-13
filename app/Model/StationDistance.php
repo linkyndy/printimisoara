@@ -91,73 +91,96 @@ class StationDistance extends AppModel {
 		if (empty($times)){
 			return true;
 		}
-		
+		debug($times);
+		// If there are times for each station of a line
 		// Make a circular array so that distance between all
 		// two consecutive stations are saved
-		$times[] = $times[0];
+		if (
+			count($times) == 
+			$this->FromStation->StationLine->find('count', array('conditions' => array('StationLine.line_id' => $times[0][0]['line_id'])))
+		) {
+			$times[] = $times[0];
+		}
 		
 		$stationDistances = array();
-		foreach ($times as $i => $time) {
-			if (
-				empty($times[$i]) ||
-				empty($times[$i + 1]) ||
-				$i == count($times) - 1
-			) {
+		// Loop through each time...
+		for ($i = 0; $i < count($times) - 1; $i++) {
+			// Skip to next time if current is empty
+			if (empty($times[$i])) {
 				continue;
 			}
 			
-			// Cycle to all times between the two stations
-			foreach ($times[$i] as $fromTime) {
-				foreach ($times[$i + 1] as $toTime) {
-					// Check times only if they are of M type
-					if (
-						$fromTime['type'] != 'M' || 
-						$toTime['type'] != 'M'
-					){
-						continue;
-					}
-					
-					$minutes = $this->_minutesBetween($fromTime['time'], $toTime['time']);
-					
-					// Save only the distances whose times are for the same vehicle 
-					if (
-						$minutes === false ||
-						$minutes > Configure::read('Config.max_distance_in_minutes')
-					) {
-						continue;
-					}
-					
-					$stationDistance = array(
-						'from_station_id' => $fromTime['station_id'],
-						'to_station_id' => $toTime['station_id'],
-						'minutes' => $minutes,
-						'time' => date('H:i'),
-						'day' => $fromTime['day'],
-					);
-					
-					// Occurances among currently parsed times..
-					// ... occurances from database
-					if ($existing = array_search($stationDistance, $stationDistances) !== false) {
-						// If occurances set (from database occurances on first occurance parse)
-						if (isset($stationDistances[$existing]['occurances'])) {
-							$stationDistances[$existing]['occurances']++;
-						} else {
-							$stationDistances[$existing]['occurances'] = 2;
+			// ...and all its following times
+			for ($j = $i + 1; $j < count($times); $j++) {
+				// Break loop and go to next *first* time if current
+				// second time is empty or
+				if (empty($times[$j])) {
+					break;
+				}
+				
+				$stationDistance = array();
+				// Cycle to all times between the two stations
+				foreach ($times[$i] as $fromTime) {
+					foreach ($times[$j] as $toTime) {
+						// Check times only if they are of M type
+						if (
+							$fromTime['type'] != 'M' || 
+							$toTime['type'] != 'M'
+						){
+							continue;
 						}
 						
-						// Don't add the distance to the array since it already exists there
-						continue;
-						
-					} elseif ($occurances = $this->_distanceOccurances($stationDistance)) {
-						$stationDistance['id'] = $occurances['StationDistance']['id'];
-						$stationDistance['occurances'] = $occurances['StationDistance']['occurances'] + 1;
+						// Compute minutes between the first and the second station
+						// and add them to $minutes for further reference
+						$minutes = $this->_minutesBetween($fromTime['time'], $toTime['time']);
+
+						// Save only the distances whose times are for the same vehicle 
+						// TODO find a better way for checking $minutes for multiple stations ($j-$i)
+						if (
+							$minutes === false ||
+							$minutes / ($j - $i) > Configure::read('Config.max_distance_in_minutes')
+						) {
+							continue;
+						}
+
+						$stationDistance = array(
+							'from_station_id' => $fromTime['station_id'],
+							'to_station_id' => $toTime['station_id'],
+							'minutes' => $minutes,
+							'time' => date('H:i'),
+							'day' => $fromTime['day'],
+						);
+
+						// Occurances among currently parsed times..
+						// ... occurances from database
+						if ($existing = array_search($stationDistance, $stationDistances) !== false) {
+							// If occurances set (from database occurances on first occurance parse)
+							if (isset($stationDistances[$existing]['occurances'])) {
+								$stationDistances[$existing]['occurances']++;
+							} else {
+								$stationDistances[$existing]['occurances'] = 2;
+							}
+
+							// Don't add the distance to the array since it already exists there
+							continue;
+
+						} elseif ($occurances = $this->_distanceOccurances($stationDistance)) {
+							$stationDistance['id'] = $occurances['StationDistance']['id'];
+							$stationDistance['occurances'] = $occurances['StationDistance']['occurances'] + 1;
+						}
+
+						$stationDistances[] = $stationDistance;
 					}
-					
-					$stationDistances[] = $stationDistance;
+				}
+				
+				// No distance has been saved, break the *second* time loop
+				// and head to the next first time
+				if (empty($stationDistance)) {
+					break;
 				}
 			}
 		}
-		
+		debug($stationDistances);exit;
 		return (!empty($stationDistances)) ? $this->saveMany($stationDistances) : true;
 	}
 	
