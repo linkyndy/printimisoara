@@ -1,4 +1,5 @@
 <?php $line_types = array('tv' => 'Tramvai', 'tb' => 'Troleibuz', 'ab' => 'Autobuz', 'am' => 'Autobuz Metropolitan', 'ae' => 'Autobuz Expres'); ?>
+<?php $line_importance = array('0' => 'Majora', '1' => 'Normala', '2' => 'Minora', '3' => 'Ocazionala'); ?>
 
 <div class="row-fluid">
 	<div class="page-header">
@@ -26,6 +27,7 @@
 				<th><?php echo $this->Paginator->sort('id_ratt', 'ID RATT');?></th>
 				<th><?php echo $this->Paginator->sort('name', 'Nume');?></th>
 				<th><?php echo $this->Paginator->sort('type', 'De');?></th>
+				<th><?php echo $this->Paginator->sort('importance', 'Importanta');?></th>
 				<th class="actions"><?php echo __('Acţiuni');?></th>
 			</tr>
 		</thead>
@@ -38,6 +40,7 @@
 						<?php echo $this->Html->line($line['Line']['name'], $line['Line']['colour'], $line['Line']['id']); ?>
 					</td>
 					<td><?php echo h($line_types[$line['Line']['type']]); ?></td>
+					<td><?php echo h($line_importance[$line['Line']['importance']]); ?></td>
 					<td class="actions">
 						<?php echo $this->Html->link('<i class="icon-th-list"></i> Detalii', array('action' => 'view', $line['Line']['id']), array('class' => 'btn btn-small', 'escape' => false)); ?>
 						<?php echo $this->Html->link('<i class="icon-edit"></i> Editează', array('action' => 'edit', $line['Line']['id']), array('class' => 'btn btn-small', 'escape' => false)); ?>

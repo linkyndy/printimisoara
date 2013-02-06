@@ -3,6 +3,7 @@
 <?php echo $this->Form->hidden('Line.id', array('value' => $line['Line']['id'])); ?>
 
 <?php $line_types = array('tv' => 'Tramvai', 'tb' => 'Troleibuz', 'ab' => 'Autobuz', 'am' => 'Autobuz Metropolitan', 'ae' => 'Autobuz Expres'); ?>
+<?php $line_importance = array('0' => 'Majora', '1' => 'Normala', '2' => 'Minora', '3' => 'Ocazionala'); ?>
 
 <div class="row-fluid">
 	<div class="page-header">
@@ -45,6 +46,10 @@
 				<tr>
 					<td>De</td>
 					<td><?php echo $line_types[h($line['Line']['type'])]; ?></td>
+				</tr>
+				<tr>
+					<td>Importanta</td>
+					<td><?php echo $line_importance[h($line['Line']['importance'])]; ?></td>
 				</tr>
 			</tbody>
 		</table>

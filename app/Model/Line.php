@@ -77,6 +77,18 @@ class Line extends AppModel {
 				//'on' => 'create', // Limit validation to 'create' or 'update' operations
 			),
 		),
+		'importance' => array(
+			'notempty' => array(
+				'rule' => array('notempty'),
+				'message' => 'Trebuie sa specifici importanta aceastei linii!',
+				'last' => true,
+			),
+			'inList' => array(
+				// 0 - major line; 1 - normal line; 2 - minor line; 3 - occasional line
+				'rule' => array('inList', array('0', '1', '2', '3')),
+				'message' => 'Importanta liniei este invalida!',
+			),
+		),
 		'colour' => array(
 			'notempty' => array(
 				'rule' => array('notempty'),
