@@ -116,6 +116,22 @@ class Line extends AppModel {
  *
  * @var array
  */
+	public $hasOne = array(
+		'Coverage' => array(
+			'className' => 'Coverage',
+			'foreignKey' => 'line_id',
+			'dependent' => true,
+			'conditions' => '',
+			'fields' => '',
+			'order' => '',
+			'limit' => '',
+			'offset' => '',
+			'exclusive' => '',
+			'finderQuery' => '',
+			'counterQuery' => ''
+		),
+	);
+	
 	public $hasMany = array(
 		'Time' => array(
 			'className' => 'Time',
@@ -317,5 +333,105 @@ class Line extends AppModel {
 		
 		return true;
 	}
-
+	
+	public function computeCoverage($lineId = null) {
+		if (!$this->exists($lineId)) {
+			return false;
+		}
+		
+		// Fetch line data
+		$this->recursive = -1;
+		$line = $this->read(null, $lineId);
+		
+		// Fetch the line's stations
+		$stations = $this->StationLine->find('list', array(
+			'fields' => array('StationLine.id', 'StationLine.station_id'),
+			'conditions' => array('StationLine.line_id' => $lineId),
+			'order' => 'StationLine.order ASC',
+		));
+		
+		// Don't go further if line has no stations defined
+		if (empty($stations)) {
+			return false;
+		}
+		
+		// Number of covered hours for stations for each day
+		$covered = array('L' => 0, 'LV' => 0, 'S' => 0, 'D' => 0);
+		
+		// Go through all line's stations
+		foreach ($stations as $stationId) {
+			// Fetch times for each line's station
+			$times = $this->Time->find('all', array(
+				'fields' => array('Time.id', 'Time.station_id', 'Time.line_id', 'Time.time', 'Time.day', 'Time.type', 'Time.occurances'),
+				'conditions' => array('Time.station_id' => $stationId, 'Time.line_id' => $lineId),
+				'order' => 'Time.time ASC',
+			));
+			
+			// Skip stations with no times
+			if (empty($times)) {
+				continue;
+			}
+			
+			// Initiate the array that stores times' day and hour
+			$dayAndHours = array();
+			for ($i = 0; $i <= 23; $i++) {
+				foreach (array('L', 'LV', 'S', 'D') as $day) {
+					$dayAndHours[$day][$i] = 0;
+				}
+			}
+			
+			// Add times to the previously initiated array
+			foreach ($times as $time) {
+				$dayAndHours[$time['Time']['day']][date('G', strtotime($time['Time']['time']))]++;
+			}
+			
+			// Check whether the number of times/hour (or day) defined by
+			// this line's importance is achieved or not by this station
+			if ($line['Line']['importance'] == 3) {
+				foreach (array('L', 'LV', 'S', 'D') as $day) {
+					if (array_sum($dayAndHours[$day]) >= 4) {
+						$covered[$day]++;
+					}
+				}
+			} else {
+				foreach ($dayAndHours as $day => $hours) {
+					foreach ($hours as $hour) {
+						if (
+							$line['Line']['importance'] == 0 && $hour >= 5 ||
+							$line['Line']['importance'] == 1 && $hour == 4 ||
+							$line['Line']['importance'] == 2 && $hour >= 2 && $hour <= 3
+						) {
+							$covered[$day]++;
+						}
+					}
+				}
+			}
+		}
+		
+		// Compute coverage for each day
+		$coverage = array('L' => 0, 'LV' => 0, 'S' => 0, 'D' => 0);
+		foreach ($covered as $day => $hoursCovered) {
+			// Coverage for a day for a specific line is achieved by dividing
+			// the total numbers of hours covered from all stations to the
+			// number of valid hours, 18, and to the number of stations.
+			// We multiply by 100 to get a percent score.
+			$coverage[$day] = round(($hoursCovered / 18 / count($stations) * 100), 2);
+		}
+		$coverage['global'] = round((array_sum($coverage) / count($coverage)), 2);
+		
+		// Check to see whether a record for this line already exists
+		if ($coverageId = $this->Coverage->field('id', array('line_id' => $lineId))) {
+			$this->Coverage->id = $coverageId;
+		}
+		
+		// Save or update the new coverage
+		return $this->Coverage->save(array(
+			'line_id' => $lineId,
+			'coverage' => $coverage['global'],
+			'coverage_L' => $coverage['L'],
+			'coverage_LV' => $coverage['LV'],
+			'coverage_S' => $coverage['S'],
+			'coverage_D' => $coverage['D'],
+		));
+	}
 }

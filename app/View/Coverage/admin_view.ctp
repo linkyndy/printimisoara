@@ -51,37 +51,13 @@
 					<td>Importanta</td>
 					<td><?php echo $line_importance[h($line['Line']['importance'])]; ?></td>
 				</tr>
-				<tr>
-					<td>Acoperire</td>
-					<td>
-						<table class="table table-bordered">
-							<thead>
-								<tr>
-									<th><span class="label">GENERALA</span></th>
-									<th><span class="label label-L">L</span></th>
-									<th><span class="label label-LV">LV</span></th>
-									<th><span class="label label-S">S</span></th>
-									<th><span class="label label-D">D</span></th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr>
-									<td><?php echo h($line['Coverage']['coverage']); ?><small class="muted">%</small></td>
-									<td><?php echo h($line['Coverage']['coverage_L']); ?><small class="muted">%</small></td>
-									<td><?php echo h($line['Coverage']['coverage_LV']); ?><small class="muted">%</small></td>
-									<td><?php echo h($line['Coverage']['coverage_S']); ?><small class="muted">%</small></td>
-									<td><?php echo h($line['Coverage']['coverage_D']); ?><small class="muted">%</small></td>
-								</tr>
-							</tbody>
-						</table>
-					</td>
-				</tr>
 			</tbody>
 		</table>
 		
-		<div class="btn-group">
-			<?php echo $this->Html->link('<i class="icon-refresh"></i> Recalculeaza acoperirea', array('action' => 'compute_coverage', $line['Line']['id']), array('class' => 'btn', 'escape' => false)); ?>
+		<div class="progress <?php //echo $marks[$line['Line']['coverage_mark'][$day]]; ?>">
+			<div class="bar" style="width: <?php //echo $line['Line']['coverage_percent'][$day]; ?>%;"></div>
 		</div>
+		<?php echo $this->Html->link('compute', array('action' => 'compute_coverage', $line['Line']['id'])); ?>
 	</div>
 	
 	<div class="span8">

@@ -109,8 +109,14 @@ class TimesController extends AppController {
 	}
 	
 	public function admin_coverage(){
-		extract($this->Time->coverage());
-		$this->set(compact('lines', 'global_coverage_percent'));
+		$lines = $this->Line->find('all', array(
+			'order' => 'Line.name ASC',
+			'contain' => array('Coverage'),
+		));
+		$lineCoverages = Hash::extract($lines, '{n}.Coverage.coverage');
+		
+		$this->set('lines', $lines);
+		$this->set('global_coverage_percent', round(array_sum($lineCoverages) / count($lineCoverages), 2));
 	}
 	
 	/**

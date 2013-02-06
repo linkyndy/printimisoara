@@ -1,15 +1,7 @@
 <?php
 App::uses('AppController', 'Controller');
 
-class LinesController extends AppController {
-
-	public $uses = array('Line', 'Station', 'StationLine', 'Suggestion');
-	
-	public $paginate = array(
-		'order' => array(
-			'Line.name' => 'ASC'
-		)
-	);
+class CoverageController extends AppController {
 
 /**
  * Everyone
@@ -77,7 +69,7 @@ class LinesController extends AppController {
 		
 		$this->Line->computeCoverage($id);
 		
-		$this->redirect($this->referer());
+		$this->redirect(array('action' => 'view', $id));
 	}
 
 	public function admin_add() {
